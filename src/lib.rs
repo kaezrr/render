@@ -10,7 +10,6 @@ use wgpu::Features;
 use wgpu::Instance;
 use wgpu::InstanceDescriptor;
 use wgpu::Operations;
-use wgpu::PresentMode::AutoNoVsync;
 use wgpu::Queue;
 use wgpu::RenderPassColorAttachment;
 use wgpu::RenderPassDescriptor;
@@ -20,6 +19,7 @@ use wgpu::SurfaceConfiguration;
 use wgpu::TextureUsages;
 use wgpu::wgt::CommandEncoderDescriptor;
 use wgpu::wgt::DeviceDescriptor;
+use wgpu::wgt::TextureViewDescriptor;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::WindowEvent;
@@ -49,7 +49,7 @@ impl ApplicationHandler for App {
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
-        let Some(state) = self.state.as_ref() else {
+        let Some(state) = self.state.as_mut() else {
             warn!("Window not initialized yet!");
             return;
         };
@@ -61,7 +61,11 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
-                state.window.request_redraw();
+                pollster::block_on(state.render()).unwrap();
+            }
+
+            WindowEvent::Resized(size) => {
+                state.resize(size.width, size.height);
             }
 
             _ => (),
@@ -70,12 +74,11 @@ impl ApplicationHandler for App {
 }
 
 struct State {
-    instance: Instance,
     window: Arc<Window>,
     device: Device,
     queue: Queue,
     surface: Surface<'static>,
-    surface_configuration: SurfaceConfiguration,
+    config: SurfaceConfiguration,
 }
 
 impl State {
@@ -125,7 +128,7 @@ impl State {
             let size = window.inner_size();
 
             SurfaceConfiguration {
-                usage: capabilites.usages,
+                usage: TextureUsages::RENDER_ATTACHMENT,
                 format: surface_format,
                 color_space: wgpu::SurfaceColorSpace::Auto,
                 width: size.width,
@@ -140,51 +143,70 @@ impl State {
         surface.configure(&device, &surface_configuration);
 
         Ok(Self {
-            instance,
             device,
             window,
             queue,
             surface,
-            surface_configuration,
+            config: surface_configuration,
         })
     }
 
     async fn render(&self) -> anyhow::Result<()> {
+        self.window.request_redraw();
+
         let mut command_encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor::default());
 
-        let current_texture = self.surface.get_current_texture();
+        let surface = match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
+            wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => surface_texture,
+            wgpu::CurrentSurfaceTexture::Lost => anyhow::bail!("Bro is lost"),
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                self.surface.configure(&self.device, &self.config);
+                return Ok(());
+            }
+            _ => return Ok(()),
+        };
 
-        let render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
-            label: Some("render pass"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: todo!(),
-                depth_slice: None,
-                resolve_target: None,
-                ops: Operations {
-                    load: wgpu::LoadOp::Clear(Color::GREEN),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
+        let texture_view = surface
+            .texture
+            .create_view(&TextureViewDescriptor::default());
+        {
+            let _render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("render pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &texture_view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: wgpu::LoadOp::Clear(Color {
+                            r: 0.0,
+                            g: 0.1,
+                            b: 0.7,
+                            a: 1.0,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+        }
 
-        let command_buffer = command_encoder.finish();
-
-        self.queue.submit([command_buffer]);
+        self.queue.submit(std::iter::once(command_encoder.finish()));
+        self.queue.present(surface);
 
         Ok(())
     }
 
-    fn resize(&mut self, new_width: u32, new_height: u32) {
-        self.surface_configuration.width = new_width;
-        self.surface_configuration.height = new_height;
-
-        self.surface
-            .configure(&self.device, &self.surface_configuration);
+    fn resize(&mut self, width: u32, height: u32) {
+        if width > 0 && height > 0 {
+            self.config.width = width;
+            self.config.height = height;
+            self.surface.configure(&self.device, &self.config);
+        }
     }
 }
