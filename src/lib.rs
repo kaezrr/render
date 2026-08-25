@@ -3,16 +3,22 @@ use std::sync::Arc;
 use log::info;
 use log::warn;
 use wgpu::Backends;
+use wgpu::Color;
 use wgpu::Device;
 use wgpu::ExperimentalFeatures;
 use wgpu::Features;
 use wgpu::Instance;
 use wgpu::InstanceDescriptor;
-use wgpu::Limits;
-use wgpu::MemoryHints;
+use wgpu::Operations;
+use wgpu::PresentMode::AutoNoVsync;
 use wgpu::Queue;
+use wgpu::RenderPassColorAttachment;
+use wgpu::RenderPassDescriptor;
 use wgpu::RequestAdapterOptionsBase;
 use wgpu::Surface;
+use wgpu::SurfaceConfiguration;
+use wgpu::TextureUsages;
+use wgpu::wgt::CommandEncoderDescriptor;
 use wgpu::wgt::DeviceDescriptor;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
@@ -69,6 +75,7 @@ struct State {
     device: Device,
     queue: Queue,
     surface: Surface<'static>,
+    surface_configuration: SurfaceConfiguration,
 }
 
 impl State {
@@ -83,29 +90,54 @@ impl State {
 
         let surface = instance.create_surface(window.clone())?;
 
-        let (device, queue) = {
-            let adapter = instance
-                .request_adapter(&RequestAdapterOptionsBase {
-                    power_preference: wgpu::PowerPreference::None,
-                    force_fallback_adapter: false,
-                    compatible_surface: Some(&surface),
-                    apply_limit_buckets: false,
-                })
-                .await?;
+        let adapter = instance
+            .request_adapter(&RequestAdapterOptionsBase {
+                power_preference: wgpu::PowerPreference::None,
+                force_fallback_adapter: false,
+                compatible_surface: Some(&surface),
+                apply_limit_buckets: false,
+            })
+            .await?;
 
-            info!("Using physical device: {}", adapter.get_info().name);
+        let (device, queue) = adapter
+            .request_device(&DeviceDescriptor {
+                label: Some("wgpu state device"),
+                required_features: Features::empty(),
+                required_limits: Default::default(),
+                experimental_features: ExperimentalFeatures::disabled(),
+                memory_hints: Default::default(),
+                trace: wgpu::Trace::Off,
+            })
+            .await?;
 
-            adapter
-                .request_device(&DeviceDescriptor {
-                    label: Some("wgpu state device"),
-                    required_features: Features::empty(),
-                    required_limits: Limits::default(),
-                    experimental_features: ExperimentalFeatures::disabled(),
-                    memory_hints: MemoryHints::default(),
-                    trace: wgpu::Trace::Off,
-                })
-                .await?
+        info!("Using physical device: {}", device.adapter_info().name);
+
+        let surface_configuration = {
+            let capabilites = surface.get_capabilities(&adapter);
+
+            let surface_format = capabilites
+                .formats
+                .iter()
+                .find(|x| x.is_srgb())
+                .copied()
+                .unwrap_or(capabilites.formats[0]);
+
+            let size = window.inner_size();
+
+            SurfaceConfiguration {
+                usage: capabilites.usages,
+                format: surface_format,
+                color_space: wgpu::SurfaceColorSpace::Auto,
+                width: size.width,
+                height: size.height,
+                present_mode: capabilites.present_modes[0],
+                desired_maximum_frame_latency: 2,
+                alpha_mode: capabilites.alpha_modes[0],
+                view_formats: vec![],
+            }
         };
+
+        surface.configure(&device, &surface_configuration);
 
         Ok(Self {
             instance,
@@ -113,6 +145,46 @@ impl State {
             window,
             queue,
             surface,
+            surface_configuration,
         })
+    }
+
+    async fn render(&self) -> anyhow::Result<()> {
+        let mut command_encoder = self
+            .device
+            .create_command_encoder(&CommandEncoderDescriptor::default());
+
+        let current_texture = self.surface.get_current_texture();
+
+        let render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("render pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: todo!(),
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations {
+                    load: wgpu::LoadOp::Clear(Color::GREEN),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+
+        let command_buffer = command_encoder.finish();
+
+        self.queue.submit([command_buffer]);
+
+        Ok(())
+    }
+
+    fn resize(&mut self, new_width: u32, new_height: u32) {
+        self.surface_configuration.width = new_width;
+        self.surface_configuration.height = new_height;
+
+        self.surface
+            .configure(&self.device, &self.surface_configuration);
     }
 }
