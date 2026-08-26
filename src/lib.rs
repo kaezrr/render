@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use log::debug;
+use log::error;
 use log::info;
 use log::warn;
 use wgpu::Backends;
@@ -22,8 +24,10 @@ use wgpu::wgt::DeviceDescriptor;
 use wgpu::wgt::TextureViewDescriptor;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
+use winit::event::KeyEvent;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
+use winit::keyboard::KeyCode;
 use winit::window::Window;
 use winit::window::WindowId;
 
@@ -36,7 +40,7 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = {
             let attributes = Window::default_attributes()
-                .with_title("Render")
+                .with_title("Render - PROJECT")
                 .with_inner_size(LogicalSize::new(640, 480));
 
             Arc::new(event_loop.create_window(attributes).unwrap())
@@ -61,11 +65,26 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
-                pollster::block_on(state.render()).unwrap();
+                if let Err(e) = state.render() {
+                    error!("Error while rendering: {e}");
+                    event_loop.exit();
+                }
             }
 
             WindowEvent::Resized(size) => {
                 state.resize(size.width, size.height);
+            }
+
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: winit::keyboard::PhysicalKey::Code(key),
+                        state: key_state,
+                        ..
+                    },
+                ..
+            } => {
+                state.handle_key(event_loop, key, key_state.is_pressed());
             }
 
             _ => (),
@@ -79,6 +98,7 @@ struct State {
     queue: Queue,
     surface: Surface<'static>,
     config: SurfaceConfiguration,
+    is_configured: bool,
 }
 
 impl State {
@@ -148,31 +168,42 @@ impl State {
             queue,
             surface,
             config: surface_configuration,
+            is_configured: false,
         })
     }
 
-    async fn render(&self) -> anyhow::Result<()> {
+    fn render(&self) -> anyhow::Result<()> {
         self.window.request_redraw();
+
+        if !self.is_configured {
+            warn!("Trying to render unconfigured surface");
+            return Ok(());
+        }
 
         let mut command_encoder = self
             .device
             .create_command_encoder(&CommandEncoderDescriptor::default());
 
-        let surface = match self.surface.get_current_texture() {
+        let current_texture = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
+
             wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => surface_texture,
-            wgpu::CurrentSurfaceTexture::Lost => anyhow::bail!("Bro is lost"),
+
+            wgpu::CurrentSurfaceTexture::Lost => anyhow::bail!("Device was lost"),
+
             wgpu::CurrentSurfaceTexture::Outdated => {
                 self.surface.configure(&self.device, &self.config);
                 return Ok(());
             }
+
             _ => return Ok(()),
         };
 
-        let texture_view = surface
-            .texture
-            .create_view(&TextureViewDescriptor::default());
         {
+            let texture_view = current_texture
+                .texture
+                .create_view(&TextureViewDescriptor::default());
+
             let _render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("render pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
@@ -181,9 +212,9 @@ impl State {
                     resolve_target: None,
                     ops: Operations {
                         load: wgpu::LoadOp::Clear(Color {
-                            r: 0.0,
-                            g: 0.1,
-                            b: 0.7,
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
@@ -197,7 +228,7 @@ impl State {
         }
 
         self.queue.submit(std::iter::once(command_encoder.finish()));
-        self.queue.present(surface);
+        self.queue.present(current_texture);
 
         Ok(())
     }
@@ -207,6 +238,14 @@ impl State {
             self.config.width = width;
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
+            self.is_configured = true;
+        }
+    }
+
+    fn handle_key(&mut self, event_loop: &ActiveEventLoop, key: KeyCode, is_pressed: bool) {
+        match (key, is_pressed) {
+            (KeyCode::Escape, true) => event_loop.exit(),
+            (key, is_pressed) => debug!("{key:?} detected, pressed: {is_pressed}"),
         }
     }
 }
