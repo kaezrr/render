@@ -5,20 +5,34 @@ use log::error;
 use log::info;
 use log::warn;
 use wgpu::Backends;
+use wgpu::BlendState;
 use wgpu::Color;
+use wgpu::ColorTargetState;
+use wgpu::ColorWrites;
 use wgpu::Device;
 use wgpu::ExperimentalFeatures;
+use wgpu::Face;
 use wgpu::Features;
+use wgpu::FragmentState;
+use wgpu::FrontFace;
 use wgpu::Instance;
 use wgpu::InstanceDescriptor;
+use wgpu::MultisampleState;
 use wgpu::Operations;
+use wgpu::PipelineLayoutDescriptor;
+use wgpu::PolygonMode;
+use wgpu::PrimitiveState;
+use wgpu::PrimitiveTopology;
 use wgpu::Queue;
 use wgpu::RenderPassColorAttachment;
 use wgpu::RenderPassDescriptor;
+use wgpu::RenderPipeline;
+use wgpu::RenderPipelineDescriptor;
 use wgpu::RequestAdapterOptionsBase;
 use wgpu::Surface;
 use wgpu::SurfaceConfiguration;
 use wgpu::TextureUsages;
+use wgpu::VertexState;
 use wgpu::wgt::CommandEncoderDescriptor;
 use wgpu::wgt::DeviceDescriptor;
 use wgpu::wgt::TextureViewDescriptor;
@@ -41,7 +55,7 @@ impl ApplicationHandler for App {
         let window = {
             let attributes = Window::default_attributes()
                 .with_title("Render - PROJECT")
-                .with_inner_size(LogicalSize::new(640, 480));
+                .with_inner_size(LogicalSize::new(800, 600));
 
             Arc::new(event_loop.create_window(attributes).unwrap())
         };
@@ -98,7 +112,8 @@ struct State {
     queue: Queue,
     surface: Surface<'static>,
     config: SurfaceConfiguration,
-    is_configured: bool,
+    is_surface_configured: bool,
+    render_pipeline: RenderPipeline,
 }
 
 impl State {
@@ -160,7 +175,57 @@ impl State {
             }
         };
 
-        surface.configure(&device, &surface_configuration);
+        let render_pipeline = {
+            let shader_module = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
+
+            let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+                label: Some("render pipeline layout"),
+                bind_group_layouts: &[],
+                immediate_size: 0,
+            });
+
+            device.create_render_pipeline(&RenderPipelineDescriptor {
+                label: Some("render pipeline"),
+                layout: Some(&render_pipeline_layout),
+                vertex: VertexState {
+                    module: &shader_module,
+                    entry_point: Some("vs_main"),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    buffers: &[],
+                },
+
+                primitive: PrimitiveState {
+                    topology: PrimitiveTopology::TriangleList,
+                    strip_index_format: None,
+                    front_face: FrontFace::Ccw,
+                    cull_mode: Some(Face::Back),
+                    unclipped_depth: false,
+                    polygon_mode: PolygonMode::Fill,
+                    conservative: false,
+                },
+
+                depth_stencil: None,
+                multisample: MultisampleState {
+                    count: 1,
+                    mask: !0,
+                    alpha_to_coverage_enabled: false,
+                },
+
+                fragment: Some(FragmentState {
+                    module: &shader_module,
+                    entry_point: Some("fs_main"),
+                    compilation_options: wgpu::PipelineCompilationOptions::default(),
+                    targets: &[Some(ColorTargetState {
+                        format: surface_configuration.format,
+                        blend: Some(BlendState::REPLACE),
+                        write_mask: ColorWrites::ALL,
+                    })],
+                }),
+
+                multiview_mask: None,
+                cache: None,
+            })
+        };
 
         Ok(Self {
             device,
@@ -168,14 +233,15 @@ impl State {
             queue,
             surface,
             config: surface_configuration,
-            is_configured: false,
+            is_surface_configured: false,
+            render_pipeline,
         })
     }
 
     fn render(&self) -> anyhow::Result<()> {
         self.window.request_redraw();
 
-        if !self.is_configured {
+        if !self.is_surface_configured {
             warn!("Trying to render unconfigured surface");
             return Ok(());
         }
@@ -199,33 +265,36 @@ impl State {
             _ => return Ok(()),
         };
 
-        {
-            let texture_view = current_texture
-                .texture
-                .create_view(&TextureViewDescriptor::default());
+        let texture_view = current_texture
+            .texture
+            .create_view(&TextureViewDescriptor::default());
 
-            let _render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some("render pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &texture_view,
-                    depth_slice: None,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: wgpu::LoadOp::Clear(Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
-        }
+        let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("render pass"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &texture_view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations {
+                    load: wgpu::LoadOp::Clear(Color {
+                        r: 0.1,
+                        g: 0.2,
+                        b: 0.3,
+                        a: 1.0,
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+
+        render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.draw(0..3, 0..1);
+
+        drop(render_pass);
 
         self.queue.submit(std::iter::once(command_encoder.finish()));
         self.queue.present(current_texture);
@@ -238,7 +307,7 @@ impl State {
             self.config.width = width;
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
-            self.is_configured = true;
+            self.is_surface_configured = true;
         }
     }
 
