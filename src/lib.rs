@@ -17,7 +17,7 @@ use crate::state::State;
 
 #[derive(Default)]
 pub struct App {
-    state: Option<State>,
+    state: Option<State<'static>>,
 }
 
 impl ApplicationHandler for App {

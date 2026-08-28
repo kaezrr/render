@@ -1,10 +1,14 @@
 use std::sync::Arc;
 
+use bytemuck::Pod;
+use bytemuck::Zeroable;
 use log::debug;
 use log::info;
 use log::warn;
 use wgpu::Backends;
 use wgpu::BlendState;
+use wgpu::Buffer;
+use wgpu::BufferUsages;
 use wgpu::Color;
 use wgpu::ColorTargetState;
 use wgpu::ColorWrites;
@@ -31,7 +35,11 @@ use wgpu::RequestAdapterOptionsBase;
 use wgpu::Surface;
 use wgpu::SurfaceConfiguration;
 use wgpu::TextureUsages;
+use wgpu::VertexAttribute;
+use wgpu::VertexBufferLayout;
 use wgpu::VertexState;
+use wgpu::util::BufferInitDescriptor;
+use wgpu::util::DeviceExt;
 use wgpu::wgt::CommandEncoderDescriptor;
 use wgpu::wgt::DeviceDescriptor;
 use wgpu::wgt::TextureViewDescriptor;
@@ -39,18 +47,20 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
 
-pub struct State {
+pub struct State<'a> {
     pub window: Arc<Window>,
 
     device: Device,
     queue: Queue,
-    surface: Surface<'static>,
+    surface: Surface<'a>,
     config: SurfaceConfiguration,
     is_surface_configured: bool,
     render_pipeline: RenderPipeline,
+    vertex_buffer: Buffer,
+    index_buffer: Buffer,
 }
 
-impl State {
+impl State<'_> {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
         let instance = Instance::new(InstanceDescriptor {
             backends: Backends::PRIMARY,
@@ -125,7 +135,7 @@ impl State {
                     module: &shader_module,
                     entry_point: Some("vs_main"),
                     compilation_options: wgpu::PipelineCompilationOptions::default(),
-                    buffers: &[],
+                    buffers: &[Some(Vertex::desc())],
                 },
 
                 primitive: PrimitiveState {
@@ -161,6 +171,18 @@ impl State {
             })
         };
 
+        let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("vertex buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage: BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("index buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: BufferUsages::INDEX,
+        });
+
         Ok(Self {
             device,
             window,
@@ -169,6 +191,8 @@ impl State {
             config: surface_configuration,
             is_surface_configured: false,
             render_pipeline,
+            vertex_buffer,
+            index_buffer,
         })
     }
 
@@ -226,7 +250,9 @@ impl State {
         });
 
         render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.draw(0..3, 0..1);
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
 
         drop(render_pass);
 
@@ -252,3 +278,52 @@ impl State {
         }
     }
 }
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+struct Vertex {
+    position: [f32; 3],
+    color: [f32; 3],
+}
+
+impl<'a> Vertex {
+    fn desc() -> VertexBufferLayout<'a> {
+        VertexBufferLayout {
+            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x3,
+                    offset: 0,
+                    shader_location: 0,
+                },
+                VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x3,
+                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                },
+            ],
+        }
+    }
+}
+
+const VERTICES: &[Vertex] = &[
+    Vertex {
+        position: [0.5, 0.5, 0.0],
+        color: [1.0, 0.0, 0.0],
+    },
+    Vertex {
+        position: [-0.5, -0.5, 0.0],
+        color: [0.0, 1.0, 0.0],
+    },
+    Vertex {
+        position: [0.5, -0.5, 0.0],
+        color: [0.0, 0.0, 1.0],
+    },
+    Vertex {
+        position: [-0.5, 0.5, 0.0],
+        color: [1.0, 1.0, 0.0],
+    },
+];
+
+const INDICES: &[u16] = &[3, 1, 2, 2, 0, 3];
