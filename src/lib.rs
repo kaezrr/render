@@ -1,4 +1,7 @@
+mod consts;
+mod primitives;
 mod state;
+mod texture;
 
 use std::sync::Arc;
 
