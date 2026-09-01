@@ -12,6 +12,7 @@ use wgpu::BufferUsages;
 use wgpu::Color;
 use wgpu::ColorTargetState;
 use wgpu::ColorWrites;
+use wgpu::Device;
 use wgpu::Face;
 use wgpu::FragmentState;
 use wgpu::FrontFace;
@@ -52,8 +53,7 @@ pub struct State<'a> {
 
     render_pipeline: RenderPipeline,
 
-    vertex_buffer: Buffer,
-    index_buffer: Buffer,
+    mesh: Mesh,
 
     diffuse_bind_group: BindGroup,
     diffuse_texture: Texture,
@@ -192,21 +192,7 @@ impl State<'_> {
                 })
         };
 
-        let vertex_buffer = gpu_context
-            .device
-            .create_buffer_init(&BufferInitDescriptor {
-                label: Some("vertex buffer"),
-                contents: bytemuck::cast_slice(TEXTURED_VERTICES),
-                usage: BufferUsages::VERTEX,
-            });
-
-        let index_buffer = gpu_context
-            .device
-            .create_buffer_init(&BufferInitDescriptor {
-                label: Some("index buffer"),
-                contents: bytemuck::cast_slice(INDICES),
-                usage: BufferUsages::INDEX,
-            });
+        let mesh = Mesh::new(&gpu_context.device, TEXTURED_VERTICES, INDICES);
 
         Ok(Self {
             window,
@@ -214,8 +200,7 @@ impl State<'_> {
 
             render_pipeline,
 
-            vertex_buffer,
-            index_buffer,
+            mesh,
 
             diffuse_bind_group,
             diffuse_texture,
@@ -283,10 +268,10 @@ impl State<'_> {
         render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
         render_pass.set_bind_group(1, &self.camera.bind_group, &[]);
 
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
-        render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
+        render_pass.draw_indexed(0..self.mesh.num_indices, 0, 0..1);
 
         drop(render_pass);
 
@@ -308,6 +293,34 @@ impl State<'_> {
             event_loop.exit();
         } else {
             self.camera.handle_key(key, is_pressed);
+        }
+    }
+}
+
+struct Mesh {
+    vertex_buffer: Buffer,
+    index_buffer: Buffer,
+    num_indices: u32,
+}
+
+impl Mesh {
+    fn new(device: &Device, vertices: &[impl bytemuck::NoUninit], indices: &[u16]) -> Self {
+        let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("vertex buffer"),
+            contents: bytemuck::cast_slice(vertices),
+            usage: BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("index buffer"),
+            contents: bytemuck::cast_slice(indices),
+            usage: BufferUsages::INDEX,
+        });
+
+        Self {
+            vertex_buffer,
+            index_buffer,
+            num_indices: indices.len() as u32,
         }
     }
 }
