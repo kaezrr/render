@@ -50,6 +50,7 @@ use winit::keyboard::KeyCode;
 use winit::window::Window;
 
 use crate::camera::Camera;
+use crate::camera::CameraController;
 use crate::camera::CameraUniform;
 use crate::consts::INDICES;
 use crate::consts::TEXTURED_VERTICES;
@@ -75,6 +76,7 @@ pub struct State<'a> {
     diffuse_texture: Texture,
 
     camera: Camera,
+    camera_controller: CameraController,
     camera_buffer: Buffer,
     camera_uniform: CameraUniform,
     camera_bind_group: BindGroup,
@@ -310,6 +312,7 @@ impl State<'_> {
             diffuse_texture,
 
             camera,
+            camera_controller: CameraController::new(0.005),
             camera_buffer,
             camera_uniform,
             camera_bind_group,
@@ -398,10 +401,22 @@ impl State<'_> {
         }
     }
 
+    /// Update the world and camera
+    pub fn update(&mut self) {
+        self.camera_controller.update_camera(&mut self.camera);
+        self.camera_uniform.update_view_projection(&self.camera);
+        self.queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::cast_slice(&[self.camera_uniform]),
+        );
+    }
+
     pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, key: KeyCode, is_pressed: bool) {
-        match (key, is_pressed) {
-            (KeyCode::Escape, true) => event_loop.exit(),
-            (key, is_pressed) => debug!("{key:?} detected, pressed: {is_pressed}"),
+        if key == KeyCode::Escape && is_pressed {
+            event_loop.exit();
+        } else {
+            self.camera_controller.handle_key(key, is_pressed);
         }
     }
 }

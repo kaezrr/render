@@ -53,6 +53,8 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
+                state.update();
+
                 if let Err(e) = state.render() {
                     error!("Error while rendering: {e}");
                     event_loop.exit();
