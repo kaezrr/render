@@ -49,9 +49,10 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
 
+use crate::camera::Camera;
+use crate::camera::CameraUniform;
 use crate::consts::INDICES;
 use crate::consts::TEXTURED_VERTICES;
-use crate::primitives;
 use crate::primitives::TexturedVertex;
 use crate::texture::Texture;
 
@@ -73,9 +74,9 @@ pub struct State<'a> {
     diffuse_bind_group: BindGroup,
     diffuse_texture: Texture,
 
-    camera: primitives::Camera,
+    camera: Camera,
     camera_buffer: Buffer,
-    camera_uniform: primitives::CameraUniform,
+    camera_uniform: CameraUniform,
     camera_bind_group: BindGroup,
 }
 
@@ -180,7 +181,7 @@ impl State<'_> {
             ],
         });
 
-        let camera = primitives::Camera {
+        let camera = Camera {
             eye: (0.0, 1.0, 2.0).into(),
             target: (0.0, 0.0, 0.0).into(),
             up: glam::Vec3::Y,
@@ -190,7 +191,7 @@ impl State<'_> {
             zfar: 100.0,
         };
 
-        let camera_uniform = primitives::CameraUniform::new().with_view_projection(&camera);
+        let camera_uniform = camera.create_uniform();
 
         let camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("camera_buffer"),
