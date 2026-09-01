@@ -62,7 +62,7 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::Resized(size) => {
-                state.resize(size.width, size.height);
+                state.gpu_context.resize_surface(size.width, size.height);
             }
 
             WindowEvent::KeyboardInput {
