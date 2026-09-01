@@ -17,7 +17,12 @@ use winit::window::Window;
 use crate::asset_str;
 use crate::camera::Camera;
 use crate::camera::CameraBundle;
+use crate::consts::CUBE_INDICES;
+use crate::consts::CUBE_VERTICES;
 use crate::consts::INDICES;
+use crate::consts::TEXTURED_VERTICES;
+use crate::consts::TRIANGLE_INDICES;
+use crate::consts::TRIANGLE_VERTICES;
 use crate::consts::VERTICES;
 use crate::mesh::Mesh;
 use crate::pipeline;
@@ -60,7 +65,7 @@ impl State<'_> {
             &[Some(&camera.bind_group_layout)],
         );
 
-        let mesh = Mesh::new(&gpu_context.device, VERTICES, INDICES);
+        let mesh = Mesh::new(&gpu_context.device, CUBE_VERTICES, CUBE_INDICES);
 
         Ok(Self {
             window,
