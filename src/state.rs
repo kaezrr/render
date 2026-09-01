@@ -1,14 +1,11 @@
 use std::sync::Arc;
 
-use log::debug;
 use log::info;
 use log::warn;
 use wgpu::Backends;
 use wgpu::BindGroup;
 use wgpu::BindGroupDescriptor;
-use wgpu::BindGroupEntry;
 use wgpu::BindGroupLayoutDescriptor;
-use wgpu::BindGroupLayoutEntry;
 use wgpu::BlendState;
 use wgpu::Buffer;
 use wgpu::BufferUsages;
@@ -50,8 +47,7 @@ use winit::keyboard::KeyCode;
 use winit::window::Window;
 
 use crate::camera::Camera;
-use crate::camera::CameraController;
-use crate::camera::CameraUniform;
+use crate::camera::CameraBundle;
 use crate::consts::INDICES;
 use crate::consts::TEXTURED_VERTICES;
 use crate::primitives::TexturedVertex;
@@ -75,11 +71,7 @@ pub struct State<'a> {
     diffuse_bind_group: BindGroup,
     diffuse_texture: Texture,
 
-    camera: Camera,
-    camera_controller: CameraController,
-    camera_buffer: Buffer,
-    camera_uniform: CameraUniform,
-    camera_bind_group: BindGroup,
+    camera: CameraBundle,
 }
 
 impl State<'_> {
@@ -183,47 +175,20 @@ impl State<'_> {
             ],
         });
 
-        let camera = Camera {
-            eye: (0.0, 1.0, 2.0).into(),
-            target: (0.0, 0.0, 0.0).into(),
-            up: glam::Vec3::Y,
-            aspect_ratio: surface_configuration.width as f32 / surface_configuration.height as f32,
-            vertical_fov: 45.0f32.to_radians(),
-            znear: 0.1,
-            zfar: 100.0,
-        };
-
-        let camera_uniform = camera.create_uniform();
-
-        let camera_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: Some("camera_buffer"),
-            contents: bytemuck::cast_slice(&[camera_uniform]),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        });
-
-        let camera_bind_group_layout =
-            device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-                label: Some("camera_binding_group_layout"),
-                entries: &[BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-            });
-
-        let camera_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some("camera_binding_group"),
-            layout: &camera_bind_group_layout,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
-        });
+        let camera = CameraBundle::new(
+            &device,
+            Camera {
+                eye: (0.0, 1.0, 2.0).into(),
+                target: (0.0, 0.0, 0.0).into(),
+                up: glam::Vec3::Y,
+                aspect_ratio: surface_configuration.width as f32
+                    / surface_configuration.height as f32,
+                vertical_fov: 45.0f32.to_radians(),
+                znear: 0.1,
+                zfar: 100.0,
+            },
+            0.005,
+        );
 
         let render_pipeline = {
             let shader_module =
@@ -233,7 +198,7 @@ impl State<'_> {
                 label: Some("render pipeline layout"),
                 bind_group_layouts: &[
                     Some(&texture_bind_group_layout),
-                    Some(&camera_bind_group_layout),
+                    Some(&camera.bind_group_layout),
                 ],
                 immediate_size: 0,
             });
@@ -312,10 +277,6 @@ impl State<'_> {
             diffuse_texture,
 
             camera,
-            camera_controller: CameraController::new(0.005),
-            camera_buffer,
-            camera_uniform,
-            camera_bind_group,
         })
     }
 
@@ -376,7 +337,7 @@ impl State<'_> {
         render_pass.set_pipeline(&self.render_pipeline);
 
         render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.camera.bind_group, &[]);
 
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
@@ -403,20 +364,14 @@ impl State<'_> {
 
     /// Update the world and camera
     pub fn update(&mut self) {
-        self.camera_controller.update_camera(&mut self.camera);
-        self.camera_uniform.update_view_projection(&self.camera);
-        self.queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[self.camera_uniform]),
-        );
+        self.camera.update(&self.queue);
     }
 
     pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, key: KeyCode, is_pressed: bool) {
         if key == KeyCode::Escape && is_pressed {
             event_loop.exit();
         } else {
-            self.camera_controller.handle_key(key, is_pressed);
+            self.camera.handle_key(key, is_pressed);
         }
     }
 }

@@ -2,6 +2,19 @@ use bytemuck::Pod;
 use bytemuck::Zeroable;
 use glam::Mat4;
 use glam::camera;
+use wgpu::BindGroup;
+use wgpu::BindGroupDescriptor;
+use wgpu::BindGroupEntry;
+use wgpu::BindGroupLayout;
+use wgpu::BindGroupLayoutDescriptor;
+use wgpu::BindGroupLayoutEntry;
+use wgpu::Buffer;
+use wgpu::BufferUsages;
+use wgpu::Device;
+use wgpu::Queue;
+use wgpu::ShaderStages;
+use wgpu::util::BufferInitDescriptor;
+use wgpu::util::DeviceExt;
 use winit::keyboard::KeyCode;
 
 pub struct Camera {
@@ -52,7 +65,7 @@ impl CameraUniform {
     }
 }
 
-pub struct CameraController {
+struct CameraController {
     speed: f32,
     is_forward_pressed: bool,
     is_backward_pressed: bool,
@@ -61,7 +74,7 @@ pub struct CameraController {
 }
 
 impl CameraController {
-    pub fn new(speed: f32) -> Self {
+    fn new(speed: f32) -> Self {
         Self {
             speed,
             is_forward_pressed: false,
@@ -71,7 +84,7 @@ impl CameraController {
         }
     }
 
-    pub fn handle_key(&mut self, code: KeyCode, is_pressed: bool) {
+    fn handle_key(&mut self, code: KeyCode, is_pressed: bool) {
         match code {
             KeyCode::KeyW | KeyCode::ArrowUp => self.is_forward_pressed = is_pressed,
             KeyCode::KeyS | KeyCode::ArrowDown => self.is_backward_pressed = is_pressed,
@@ -81,7 +94,7 @@ impl CameraController {
         }
     }
 
-    pub fn update_camera(&self, camera: &mut Camera) {
+    fn update_camera(&self, camera: &mut Camera) {
         let (forward, forward_magnitude) = (camera.target - camera.eye).normalize_and_length();
 
         if self.is_forward_pressed && forward_magnitude > self.speed {
@@ -106,5 +119,69 @@ impl CameraController {
             camera.eye =
                 camera.target - (forward - right * self.speed).normalize() * forward_magnitude;
         }
+    }
+}
+
+pub struct CameraBundle {
+    pub camera: Camera,
+    pub controller: CameraController,
+    pub bind_group: BindGroup,
+    pub bind_group_layout: BindGroupLayout,
+
+    buffer: Buffer,
+    uniform: CameraUniform,
+}
+
+impl CameraBundle {
+    pub fn new(device: &Device, camera: Camera, speed: f32) -> Self {
+        let uniform = camera.create_uniform();
+
+        let buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("camera_buffer"),
+            contents: bytemuck::cast_slice(&[uniform]),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: Some("camera_binding_group_layout"),
+            entries: &[BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+        let bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("camera_binding_group"),
+            layout: &bind_group_layout,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+
+        Self {
+            camera,
+            controller: CameraController::new(speed),
+            bind_group,
+            bind_group_layout,
+            buffer,
+            uniform,
+        }
+    }
+
+    pub fn update(&mut self, queue: &Queue) {
+        self.controller.update_camera(&mut self.camera);
+        self.uniform.update_view_projection(&self.camera);
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.uniform]));
+    }
+
+    pub fn handle_key(&mut self, code: KeyCode, is_pressed: bool) {
+        self.controller.handle_key(code, is_pressed);
     }
 }
