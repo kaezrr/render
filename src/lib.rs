@@ -81,3 +81,18 @@ impl ApplicationHandler for App {
         }
     }
 }
+
+macro_rules! asset_str {
+    ($path:expr) => {
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/", $path))
+    };
+}
+
+macro_rules! asset_bytes {
+    ($path:expr) => {
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/", $path))
+    };
+}
+
+pub(crate) use asset_bytes;
+pub(crate) use asset_str;

@@ -1,3 +1,5 @@
+mod gpu;
+
 use std::sync::Arc;
 
 use log::info;
@@ -32,6 +34,7 @@ use wgpu::RenderPassDescriptor;
 use wgpu::RenderPipeline;
 use wgpu::RenderPipelineDescriptor;
 use wgpu::RequestAdapterOptionsBase;
+use wgpu::ShaderModuleDescriptor;
 use wgpu::ShaderStages;
 use wgpu::Surface;
 use wgpu::SurfaceConfiguration;
@@ -46,6 +49,8 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
 
+use crate::asset_bytes;
+use crate::asset_str;
 use crate::camera::Camera;
 use crate::camera::CameraBundle;
 use crate::consts::INDICES;
@@ -133,7 +138,7 @@ impl State<'_> {
             }
         };
 
-        let diffuse_bytes = include_bytes!("assets/happy-tree.png");
+        let diffuse_bytes = asset_bytes!("happy-tree.png");
         let diffuse_texture =
             Texture::from_bytes(&device, &queue, diffuse_bytes, "happy_tree_texture")?;
 
@@ -191,8 +196,10 @@ impl State<'_> {
         );
 
         let render_pipeline = {
-            let shader_module =
-                device.create_shader_module(wgpu::include_wgsl!("shaders/texture.wgsl"));
+            let shader_module = device.create_shader_module(ShaderModuleDescriptor {
+                label: Some("texture.wgsl"),
+                source: wgpu::ShaderSource::Wgsl(asset_str!("shaders/texture.wgsl").into()),
+            });
 
             let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
                 label: Some("render pipeline layout"),
