@@ -65,7 +65,7 @@ impl CameraUniform {
     }
 }
 
-struct CameraController {
+pub struct CameraController {
     speed: f32,
     is_forward_pressed: bool,
     is_backward_pressed: bool,

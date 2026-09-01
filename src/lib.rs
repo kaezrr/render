@@ -1,8 +1,10 @@
 mod camera;
 mod consts;
-mod primitives;
+mod mesh;
+mod pipeline;
 mod state;
 mod texture;
+mod vertex;
 
 use std::sync::Arc;
 

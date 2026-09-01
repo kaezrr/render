@@ -1,5 +1,8 @@
 #![allow(unused)]
 
+use std::fmt::Debug;
+
+use bytemuck::NoUninit;
 use bytemuck::Pod;
 use bytemuck::Zeroable;
 use glam::Mat3A;
@@ -8,6 +11,10 @@ use glam::camera;
 use wgpu::VertexAttribute;
 use wgpu::VertexBufferLayout;
 
+pub trait GpuVertex: NoUninit {
+    fn desc() -> VertexBufferLayout<'static>;
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct Vertex {
@@ -15,13 +22,15 @@ pub struct Vertex {
     pub color: [f32; 3],
 }
 
-impl<'a> Vertex {
+impl Vertex {
     const ATTRIBS: [VertexAttribute; 2] = wgpu::vertex_attr_array![
         0 => Float32x3,
         1 => Float32x3,
     ];
+}
 
-    pub fn desc() -> VertexBufferLayout<'a> {
+impl GpuVertex for Vertex {
+    fn desc() -> VertexBufferLayout<'static> {
         VertexBufferLayout {
             array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
@@ -37,13 +46,15 @@ pub struct TexturedVertex {
     pub texture_coordinates: [f32; 2],
 }
 
-impl<'a> TexturedVertex {
+impl TexturedVertex {
     const ATTRIBS: [VertexAttribute; 2] = wgpu::vertex_attr_array![
         0 => Float32x3,
         1 => Float32x2,
     ];
+}
 
-    pub fn desc() -> VertexBufferLayout<'a> {
+impl GpuVertex for TexturedVertex {
+    fn desc() -> VertexBufferLayout<'static> {
         VertexBufferLayout {
             array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,

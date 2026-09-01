@@ -1,7 +1,7 @@
 #![allow(unused)]
 
-use crate::primitives::TexturedVertex;
-use crate::primitives::Vertex;
+use crate::vertex::TexturedVertex;
+use crate::vertex::Vertex;
 
 pub const VERTICES: &[Vertex] = &[
     Vertex {

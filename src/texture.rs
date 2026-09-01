@@ -1,25 +1,32 @@
 use anyhow::Ok;
 use image::GenericImageView;
+use wgpu::BindGroup;
+use wgpu::BindGroupDescriptor;
+use wgpu::BindGroupLayout;
+use wgpu::BindGroupLayoutDescriptor;
+use wgpu::Device;
 use wgpu::TextureUsages;
 use wgpu::util::DeviceExt;
 use wgpu::wgt::SamplerDescriptor;
 use wgpu::wgt::TextureDescriptor;
 
-pub struct Texture {
+pub struct TextureBundle {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
+    pub bind_group: BindGroup,
 }
 
-impl Texture {
+impl TextureBundle {
     pub fn from_bytes(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         bytes: &[u8],
         label: &str,
+        bind_group_layout: &BindGroupLayout,
     ) -> anyhow::Result<Self> {
         let image = image::load_from_memory(bytes)?;
-        Self::from_image(device, queue, &image, Some(label))
+        Self::from_image(device, queue, &image, Some(label), bind_group_layout)
     }
 
     pub fn from_image(
@@ -27,6 +34,7 @@ impl Texture {
         queue: &wgpu::Queue,
         image: &image::DynamicImage,
         label: Option<&str>,
+        bind_group_layout: &BindGroupLayout,
     ) -> anyhow::Result<Self> {
         let dimensions = image.dimensions();
 
@@ -62,10 +70,50 @@ impl Texture {
             ..Default::default()
         });
 
+        let bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: Some("diffuse_bind_group"),
+            layout: bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&sampler),
+                },
+            ],
+        });
+
         Ok(Self {
             texture,
             view,
             sampler,
+            bind_group,
         })
     }
+}
+
+pub fn texture_bind_group_layout(device: &Device) -> BindGroupLayout {
+    device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+        label: Some("texture_bind_group_layout"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    })
 }
