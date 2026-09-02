@@ -14,26 +14,25 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
 
+use crate::asset_bytes;
 use crate::asset_str;
 use crate::camera::Camera;
 use crate::camera::CameraBundle;
-use crate::consts::CUBE_INDICES;
-use crate::consts::CUBE_VERTICES;
-use crate::consts::INDICES;
-use crate::consts::TEXTURED_VERTICES;
-use crate::consts::TRIANGLE_INDICES;
-use crate::consts::TRIANGLE_VERTICES;
-use crate::consts::VERTICES;
+use crate::consts::TEXTURED_CUBE_INDICES;
+use crate::consts::TEXTURED_CUBE_VERTICES;
 use crate::mesh::Mesh;
 use crate::pipeline;
 use crate::state::gpu::GpuContext;
-use crate::vertex::Vertex;
+use crate::texture;
+use crate::texture::TextureBundle;
+use crate::vertex::TexturedVertex;
 
 pub struct State<'a> {
     pub window: Arc<Window>,
     pub gpu_context: GpuContext<'a>,
 
     render_pipeline: RenderPipeline,
+    diffuse_texture: TextureBundle,
     mesh: Mesh,
 
     camera: CameraBundle,
@@ -57,21 +56,39 @@ impl State<'_> {
             0.005,
         );
 
-        let render_pipeline = pipeline::create_render_pipeline::<Vertex>(
+        let texture_bind_group_layout = texture::texture_bind_group_layout(&gpu_context.device);
+
+        let diffuse_texture = TextureBundle::from_bytes(
+            &gpu_context.device,
+            &gpu_context.queue,
+            asset_bytes!("kirk-pray.png"),
+            "happy_tree_texture",
+            &texture_bind_group_layout,
+        )?;
+
+        let render_pipeline = pipeline::create_render_pipeline::<TexturedVertex>(
             &gpu_context.device,
             "colored",
-            asset_str!("shaders/colored.wgsl"),
+            asset_str!("shaders/texture.wgsl"),
             gpu_context.config.format,
-            &[Some(&camera.bind_group_layout)],
+            &[
+                Some(&camera.bind_group_layout),
+                Some(&texture_bind_group_layout),
+            ],
         );
 
-        let mesh = Mesh::new(&gpu_context.device, CUBE_VERTICES, CUBE_INDICES);
+        let mesh = Mesh::new(
+            &gpu_context.device,
+            TEXTURED_CUBE_VERTICES,
+            TEXTURED_CUBE_INDICES,
+        );
 
         Ok(Self {
             window,
             gpu_context,
 
             render_pipeline,
+            diffuse_texture,
             mesh,
 
             camera,
@@ -132,6 +149,7 @@ impl State<'_> {
         render_pass.set_pipeline(&self.render_pipeline);
 
         render_pass.set_bind_group(0, &self.camera.bind_group, &[]);
+        render_pass.set_bind_group(1, &self.diffuse_texture.bind_group, &[]);
 
         render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
