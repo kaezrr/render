@@ -65,9 +65,19 @@ impl InstanceBundle {
         let buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("instance_buffer"),
             contents: bytemuck::cast_slice(&raw_instances),
-            usage: wgpu::BufferUsages::VERTEX,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
         Self { instances, buffer }
+    }
+
+    pub fn update(&self, queue: &wgpu::Queue) {
+        let raw_instances = self
+            .instances
+            .iter()
+            .map(InstanceRaw::from)
+            .collect::<Vec<_>>();
+
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&raw_instances));
     }
 }

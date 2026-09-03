@@ -2,6 +2,7 @@ use bytemuck::Pod;
 use bytemuck::Zeroable;
 use glam::Mat4;
 use glam::camera;
+use log::info;
 use wgpu::BindGroup;
 use wgpu::BindGroupDescriptor;
 use wgpu::BindGroupEntry;
@@ -96,30 +97,26 @@ impl CameraController {
         }
     }
 
-    fn update_camera(&self, camera: &mut Camera) {
-        let (forward, forward_magnitude) = (camera.target - camera.eye).normalize_and_length();
+    fn update_camera(&self, camera: &mut Camera, dt: f32) {
+        let (forward, f_mag) = (camera.target - camera.eye).normalize_and_length();
 
-        if self.is_forward_pressed && forward_magnitude > self.speed {
-            camera.eye += forward * self.speed;
+        if self.is_forward_pressed && f_mag > self.speed * dt {
+            camera.eye += forward * self.speed * dt;
         }
 
         if self.is_backward_pressed {
-            camera.eye -= forward * self.speed;
+            camera.eye -= forward * self.speed * dt;
         }
 
         let right = forward.cross(camera.up);
-
         let forward = camera.target - camera.eye;
-        let forward_magnitude = forward.length();
+        let f_mag = forward.length();
 
         if self.is_right_pressed {
-            camera.eye =
-                camera.target - (forward + right * self.speed).normalize() * forward_magnitude;
+            camera.eye = camera.target - (forward + right * self.speed * dt).normalize() * f_mag;
         }
-
         if self.is_left_pressed {
-            camera.eye =
-                camera.target - (forward - right * self.speed).normalize() * forward_magnitude;
+            camera.eye = camera.target - (forward - right * self.speed * dt).normalize() * f_mag;
         }
     }
 }
@@ -178,8 +175,8 @@ impl CameraBundle {
         }
     }
 
-    pub fn update(&mut self, queue: &Queue) {
-        self.controller.update_camera(&mut self.camera);
+    pub fn update(&mut self, queue: &Queue, dt: f32) {
+        self.controller.update_camera(&mut self.camera, dt);
         self.uniform.update_view_projection(&self.camera);
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.uniform]));
     }

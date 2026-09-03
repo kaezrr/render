@@ -8,6 +8,7 @@ mod texture;
 mod vertex;
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use log::error;
 use log::info;
@@ -22,9 +23,19 @@ use winit::window::WindowId;
 
 use crate::state::State;
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct App {
     state: Option<State<'static>>,
+    last_frame_time: Instant,
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self {
+            state: None,
+            last_frame_time: Instant::now(),
+        }
+    }
 }
 
 impl ApplicationHandler for App {
@@ -55,6 +66,10 @@ impl ApplicationHandler for App {
             return;
         };
 
+        let now = Instant::now();
+        let dt = (now - self.last_frame_time).as_secs_f32();
+        self.last_frame_time = now;
+
         match event {
             WindowEvent::CloseRequested => {
                 info!("Closing application...");
@@ -62,7 +77,7 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
-                state.update();
+                state.update(dt);
 
                 if let Err(e) = state.render() {
                     error!("Error while rendering: {e}");

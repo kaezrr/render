@@ -57,11 +57,11 @@ impl State<'_> {
                 target: (0.0, 0.0, 0.0).into(),
                 up: glam::Vec3::Y,
                 aspect_ratio: gpu_context.config.width as f32 / gpu_context.config.height as f32,
-                vertical_fov: 45.0f32.to_radians(),
+                vertical_fov: f32::to_radians(45.0),
                 znear: 0.1,
                 zfar: 100.0,
             },
-            0.005,
+            5.0,
         );
 
         let texture_bind_group_layout = texture::texture_bind_group_layout(&gpu_context.device);
@@ -69,7 +69,7 @@ impl State<'_> {
         let diffuse_texture = TextureBundle::from_bytes(
             &gpu_context.device,
             &gpu_context.queue,
-            asset_bytes!("kirk-pray.png"),
+            asset_bytes!("happy-tree.png"),
             "happy_tree_texture",
             &texture_bind_group_layout,
         )?;
@@ -204,8 +204,21 @@ impl State<'_> {
         Ok(())
     }
 
-    pub fn update(&mut self) {
-        self.camera.update(&self.gpu_context.queue);
+    pub fn update(&mut self, dt: f32) {
+        self.camera.update(&self.gpu_context.queue, dt);
+
+        let rotation_speed = f32::to_radians(10.0) * dt;
+        for (i, instance) in self.instance_bundle.instances.iter_mut().enumerate() {
+            let rotation = if i % 2 == 0 {
+                Quat::from_rotation_x(rotation_speed)
+            } else {
+                Quat::from_rotation_y(rotation_speed)
+            };
+
+            instance.rotation *= rotation;
+        }
+
+        self.instance_bundle.update(&self.gpu_context.queue);
     }
 
     pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, key: KeyCode, is_pressed: bool) {
