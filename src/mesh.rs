@@ -6,6 +6,7 @@ use wgpu::util::DeviceExt;
 
 use crate::vertex::GpuVertex;
 
+#[derive(Debug)]
 pub struct Mesh {
     pub vertex_buffer: Buffer,
     pub index_buffer: Buffer,
@@ -29,7 +30,7 @@ impl Mesh {
         Self {
             vertex_buffer,
             index_buffer,
-            num_indices: indices.len() as u32,
+            num_indices: u32::try_from(indices.len()).expect("number of indices fits within u32"),
         }
     }
 }

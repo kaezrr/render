@@ -21,7 +21,7 @@ use winit::window::WindowId;
 
 use crate::state::State;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct App {
     state: Option<State<'static>>,
 }
@@ -33,13 +33,19 @@ impl ApplicationHandler for App {
                 .with_title("Render - PROJECT")
                 .with_inner_size(LogicalSize::new(800, 600));
 
-            Arc::new(event_loop.create_window(attributes).unwrap())
+            Arc::new(
+                event_loop
+                    .create_window(attributes)
+                    .expect("window successfully initialized"),
+            )
         };
 
-        let state = pollster::block_on(State::new(window)).unwrap();
-        self.state = Some(state);
+        self.state = Some(
+            pollster::block_on(State::new(window))
+                .expect("renderer state successfully initialized"),
+        );
 
-        info!("Window initialized!")
+        info!("Window initialized!");
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {

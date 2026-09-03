@@ -10,6 +10,8 @@ use wgpu::util::DeviceExt;
 use wgpu::wgt::SamplerDescriptor;
 use wgpu::wgt::TextureDescriptor;
 
+#[derive(Debug)]
+#[expect(unused)]
 pub struct TextureBundle {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,

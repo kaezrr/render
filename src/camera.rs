@@ -17,6 +17,7 @@ use wgpu::util::BufferInitDescriptor;
 use wgpu::util::DeviceExt;
 use winit::keyboard::KeyCode;
 
+#[derive(Debug)]
 pub struct Camera {
     pub eye: glam::Vec3,
     pub target: glam::Vec3,
@@ -54,7 +55,7 @@ pub struct CameraUniform {
 }
 
 impl CameraUniform {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             view_projection: Mat4::IDENTITY.to_cols_array(),
         }
@@ -65,6 +66,7 @@ impl CameraUniform {
     }
 }
 
+#[derive(Debug)]
 pub struct CameraController {
     speed: f32,
     is_forward_pressed: bool,
@@ -74,7 +76,7 @@ pub struct CameraController {
 }
 
 impl CameraController {
-    fn new(speed: f32) -> Self {
+    const fn new(speed: f32) -> Self {
         Self {
             speed,
             is_forward_pressed: false,
@@ -84,7 +86,7 @@ impl CameraController {
         }
     }
 
-    fn handle_key(&mut self, code: KeyCode, is_pressed: bool) {
+    const fn handle_key(&mut self, code: KeyCode, is_pressed: bool) {
         match code {
             KeyCode::KeyW | KeyCode::ArrowUp => self.is_forward_pressed = is_pressed,
             KeyCode::KeyS | KeyCode::ArrowDown => self.is_backward_pressed = is_pressed,
@@ -122,6 +124,7 @@ impl CameraController {
     }
 }
 
+#[derive(Debug)]
 pub struct CameraBundle {
     pub camera: Camera,
     pub controller: CameraController,
@@ -181,7 +184,7 @@ impl CameraBundle {
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.uniform]));
     }
 
-    pub fn handle_key(&mut self, code: KeyCode, is_pressed: bool) {
+    pub const fn handle_key(&mut self, code: KeyCode, is_pressed: bool) {
         self.controller.handle_key(code, is_pressed);
     }
 }

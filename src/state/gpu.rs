@@ -11,6 +11,7 @@ use wgpu::SurfaceConfiguration;
 use wgpu::wgt::DeviceDescriptor;
 use winit::window::Window;
 
+#[derive(Debug)]
 pub struct GpuContext<'a> {
     pub device: Device,
     pub queue: Queue,
@@ -23,9 +24,9 @@ impl GpuContext<'_> {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
         let instance = Instance::new(InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
-            flags: Default::default(),
-            memory_budget_thresholds: Default::default(),
-            backend_options: Default::default(),
+            flags: wgpu::InstanceFlags::default(),
+            memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
+            backend_options: wgpu::BackendOptions::default(),
             display: None,
         });
 
@@ -44,9 +45,9 @@ impl GpuContext<'_> {
             .request_device(&DeviceDescriptor {
                 label: Some("wgpu state device"),
                 required_features: wgpu::Features::empty(),
-                required_limits: Default::default(),
+                required_limits: wgpu::Limits::default(),
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                memory_hints: Default::default(),
+                memory_hints: wgpu::MemoryHints::default(),
                 trace: wgpu::Trace::Off,
             })
             .await?;

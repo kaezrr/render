@@ -27,6 +27,7 @@ use crate::texture;
 use crate::texture::TextureBundle;
 use crate::vertex::TexturedVertex;
 
+#[derive(Debug)]
 pub struct State<'a> {
     pub window: Arc<Window>,
     pub gpu_context: GpuContext<'a>,
@@ -109,9 +110,11 @@ impl State<'_> {
             .create_command_encoder(&CommandEncoderDescriptor::default());
 
         let current_texture = match self.gpu_context.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
-            wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => surface_texture,
+            wgpu::CurrentSurfaceTexture::Success(surface_texture)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => surface_texture,
+
             wgpu::CurrentSurfaceTexture::Lost => anyhow::bail!("Device was lost"),
+
             wgpu::CurrentSurfaceTexture::Outdated => {
                 self.gpu_context.configure_surface();
                 return Ok(());

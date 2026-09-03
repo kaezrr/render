@@ -11,6 +11,10 @@ glam = "0.33.6"
 image = "0.25.10"
 log = "0.4.34"
 pollster = "1.0.1"
-tokio = { version = "1.53.1", features = ["full"] }
 wgpu = "30.0.1"
 winit = "0.30.13"
+
+[lints.clippy]
+missing_const_for_fn = "warn"
+undocumented_unsafe_blocks = "forbid"
+unwrap_used = "forbid"
