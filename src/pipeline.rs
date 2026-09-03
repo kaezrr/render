@@ -2,6 +2,8 @@ use wgpu::BindGroupLayout;
 use wgpu::BlendState;
 use wgpu::ColorTargetState;
 use wgpu::ColorWrites;
+use wgpu::CompareFunction;
+use wgpu::DepthStencilState;
 use wgpu::Device;
 use wgpu::Face;
 use wgpu::FragmentState;
@@ -26,6 +28,7 @@ pub fn create_render_pipeline<V: GpuVertex>(
     shader_source: &str,
     surface_format: TextureFormat,
     bind_group_layouts: &[Option<&BindGroupLayout>],
+    depth_stencil_format: Option<TextureFormat>,
 ) -> RenderPipeline {
     let shader_module = device.create_shader_module(ShaderModuleDescriptor {
         label: Some(label),
@@ -33,13 +36,13 @@ pub fn create_render_pipeline<V: GpuVertex>(
     });
 
     let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-        label: Some("render pipeline layout"),
+        label: Some("render_pipeline_layout"),
         bind_group_layouts,
         immediate_size: 0,
     });
 
     device.create_render_pipeline(&RenderPipelineDescriptor {
-        label: Some("render pipeline"),
+        label: Some("render_pipeline"),
         layout: Some(&render_pipeline_layout),
         vertex: VertexState {
             module: &shader_module,
@@ -58,7 +61,14 @@ pub fn create_render_pipeline<V: GpuVertex>(
             conservative: false,
         },
 
-        depth_stencil: None,
+        depth_stencil: depth_stencil_format.map(|format| DepthStencilState {
+            format,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(CompareFunction::Less),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+
         multisample: MultisampleState {
             count: 1,
             mask: !0,

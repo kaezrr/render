@@ -2,7 +2,6 @@ use bytemuck::Pod;
 use bytemuck::Zeroable;
 use glam::Mat4;
 use glam::camera;
-use log::info;
 use wgpu::BindGroup;
 use wgpu::BindGroupDescriptor;
 use wgpu::BindGroupEntry;

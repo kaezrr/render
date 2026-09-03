@@ -30,6 +30,7 @@ use crate::mesh::Mesh;
 use crate::pipeline;
 use crate::state::gpu::GpuContext;
 use crate::texture;
+use crate::texture::Texture;
 use crate::texture::TextureBundle;
 use crate::vertex::TexturedVertex;
 
@@ -39,8 +40,9 @@ pub struct State<'a> {
     pub gpu_context: GpuContext<'a>,
 
     render_pipeline: RenderPipeline,
-    diffuse_texture: TextureBundle,
     instance_bundle: InstanceBundle,
+    diffuse_texture: TextureBundle,
+    depth_texture: Texture,
 
     mesh: Mesh,
     camera: CameraBundle,
@@ -66,13 +68,13 @@ impl State<'_> {
 
         let texture_bind_group_layout = texture::texture_bind_group_layout(&gpu_context.device);
 
-        let diffuse_texture = TextureBundle::from_bytes(
+        let diffuse_texture = Texture::from_bytes(
             &gpu_context.device,
             &gpu_context.queue,
             asset_bytes!("happy-tree.png"),
             "happy_tree_texture",
-            &texture_bind_group_layout,
-        )?;
+        )?
+        .with_bind_group(&gpu_context.device, &texture_bind_group_layout);
 
         let render_pipeline = pipeline::create_render_pipeline::<TexturedVertex>(
             &gpu_context.device,
@@ -83,6 +85,7 @@ impl State<'_> {
                 Some(&camera.bind_group_layout),
                 Some(&texture_bind_group_layout),
             ],
+            Some(Texture::DEPTH_FORMAT),
         );
 
         let mesh = Mesh::new(
@@ -112,13 +115,20 @@ impl State<'_> {
 
         let instance_bundle = InstanceBundle::new(&gpu_context.device, instances);
 
+        let depth_texture = Texture::create_depth_texture(
+            &gpu_context.device,
+            &gpu_context.config,
+            "depth_texture",
+        );
+
         Ok(Self {
             window,
             gpu_context,
 
             render_pipeline,
-            diffuse_texture,
             instance_bundle,
+            diffuse_texture,
+            depth_texture,
 
             mesh,
             camera,
@@ -172,7 +182,14 @@ impl State<'_> {
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: None,
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth_texture.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
             timestamp_writes: None,
             occlusion_query_set: None,
             multiview_mask: None,
@@ -207,7 +224,7 @@ impl State<'_> {
     pub fn update(&mut self, dt: f32) {
         self.camera.update(&self.gpu_context.queue, dt);
 
-        let rotation_speed = f32::to_radians(10.0) * dt;
+        let rotation_speed = f32::to_radians(100.0) * dt;
         for (i, instance) in self.instance_bundle.instances.iter_mut().enumerate() {
             let rotation = if i % 2 == 0 {
                 Quat::from_rotation_x(rotation_speed)

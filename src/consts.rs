@@ -51,7 +51,7 @@ pub const TEXTURED_CUBE_INDICES: &[u16] = &[
     20, 21, 22, 20, 22, 23, // left
 ];
 
-pub const NUM_INSTANCES_PER_ROW: u32 = 10;
+pub const NUM_INSTANCES_PER_ROW: u32 = 5;
 
 pub const INSTANCE_DISPLACEMENT: glam::Vec3 = glam::Vec3::new(
     NUM_INSTANCES_PER_ROW as f32 * 0.5,
