@@ -15,12 +15,29 @@ struct VertexOutput {
     @location(0) texture_coordinates: vec2<f32>,
 }
 
+struct InstanceInput {
+    @location(5) model_matrix_0: vec4<f32>,
+    @location(6) model_matrix_1: vec4<f32>,
+    @location(7) model_matrix_2: vec4<f32>,
+    @location(8) model_matrix_3: vec4<f32>,
+}
+
 @vertex
-fn vs_main(model: VertexInput) -> VertexOutput {
+fn vs_main(
+    model: VertexInput,
+    instance: InstanceInput
+) -> VertexOutput {
+    let model_matrix = mat4x4(
+        instance.model_matrix_0,
+        instance.model_matrix_1,
+        instance.model_matrix_2,
+        instance.model_matrix_3,
+    );
+
     var out: VertexOutput;
 
     out.texture_coordinates = model.texture_coordinates;
-    out.clip_position = camera.view_projection * vec4(model.position, 1.0);
+    out.clip_position = camera.view_projection * model_matrix * vec4(model.position, 1.0);
 
     return out;
 }

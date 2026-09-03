@@ -17,6 +17,7 @@ use wgpu::ShaderModuleDescriptor;
 use wgpu::TextureFormat;
 use wgpu::VertexState;
 
+use crate::instance::InstanceRaw;
 use crate::vertex::GpuVertex;
 
 pub fn create_render_pipeline<V: GpuVertex>(
@@ -44,7 +45,7 @@ pub fn create_render_pipeline<V: GpuVertex>(
             module: &shader_module,
             entry_point: Some("vs_main"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
-            buffers: &[Some(V::desc())],
+            buffers: &[Some(V::desc()), Some(InstanceRaw::desc())],
         },
 
         primitive: PrimitiveState {

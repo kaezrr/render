@@ -2,6 +2,8 @@ mod gpu;
 
 use std::sync::Arc;
 
+use glam::Quat;
+use glam::Vec3;
 use log::warn;
 use wgpu::Color;
 use wgpu::Operations;
@@ -18,8 +20,12 @@ use crate::asset_bytes;
 use crate::asset_str;
 use crate::camera::Camera;
 use crate::camera::CameraBundle;
+use crate::consts::INSTANCE_DISPLACEMENT;
+use crate::consts::NUM_INSTANCES_PER_ROW;
 use crate::consts::TEXTURED_CUBE_INDICES;
 use crate::consts::TEXTURED_CUBE_VERTICES;
+use crate::instance::Instance;
+use crate::instance::InstanceBundle;
 use crate::mesh::Mesh;
 use crate::pipeline;
 use crate::state::gpu::GpuContext;
@@ -34,8 +40,9 @@ pub struct State<'a> {
 
     render_pipeline: RenderPipeline,
     diffuse_texture: TextureBundle,
-    mesh: Mesh,
+    instance_bundle: InstanceBundle,
 
+    mesh: Mesh,
     camera: CameraBundle,
 }
 
@@ -84,14 +91,36 @@ impl State<'_> {
             TEXTURED_CUBE_INDICES,
         );
 
+        let instances = (0..NUM_INSTANCES_PER_ROW)
+            .flat_map(|z| {
+                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                    let position = Vec3::new(x as f32, 0.0, z as f32) - INSTANCE_DISPLACEMENT;
+                    let rotation = if position == Vec3::ZERO {
+                        Quat::from_rotation_z(0.0)
+                    } else {
+                        Quat::from_rotation_z(45.0f32.to_radians())
+                    };
+
+                    Instance {
+                        position,
+                        rotation,
+                        scale: Vec3::ONE * 0.6,
+                    }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let instance_bundle = InstanceBundle::new(&gpu_context.device, instances);
+
         Ok(Self {
             window,
             gpu_context,
 
             render_pipeline,
             diffuse_texture,
-            mesh,
+            instance_bundle,
 
+            mesh,
             camera,
         })
     }
@@ -155,9 +184,14 @@ impl State<'_> {
         render_pass.set_bind_group(1, &self.diffuse_texture.bind_group, &[]);
 
         render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
+        render_pass.set_vertex_buffer(1, self.instance_bundle.buffer.slice(..));
         render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
-        render_pass.draw_indexed(0..self.mesh.num_indices, 0, 0..1);
+        render_pass.draw_indexed(
+            0..self.mesh.num_indices,
+            0,
+            0..self.instance_bundle.instances.len() as _,
+        );
 
         drop(render_pass);
 
