@@ -36,8 +36,8 @@ use crate::vertex::Vertex;
 
 #[derive(Debug)]
 pub struct State<'a> {
-    pub window: Arc<Window>,
-    pub gpu_context: GpuContext<'a>,
+    window: Arc<Window>,
+    gpu_context: GpuContext<'a>,
 
     render_pipeline: RenderPipeline,
     instance_bundle: InstanceBundle,
@@ -244,5 +244,9 @@ impl State<'_> {
         } else {
             self.camera.handle_key(key, is_pressed);
         }
+    }
+
+    pub fn resize_surface(&mut self, width: u32, height: u32) {
+        self.gpu_context.resize_surface(width, height);
     }
 }

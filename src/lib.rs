@@ -2,6 +2,7 @@ mod camera;
 mod consts;
 mod instance;
 mod mesh;
+mod parser;
 mod pipeline;
 mod state;
 mod texture;
@@ -90,7 +91,7 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::Resized(size) => {
-                state.gpu_context.resize_surface(size.width, size.height);
+                state.resize_surface(size.width, size.height);
             }
 
             WindowEvent::KeyboardInput {
