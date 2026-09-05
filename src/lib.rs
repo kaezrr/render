@@ -2,12 +2,13 @@ mod camera;
 mod consts;
 mod instance;
 mod mesh;
+mod model;
 mod parser;
 mod pipeline;
 mod state;
 mod texture;
-mod vertex;
 
+use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -111,17 +112,18 @@ impl ApplicationHandler for App {
     }
 }
 
-macro_rules! asset_str {
-    ($path:expr) => {
-        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/", $path))
-    };
+pub(crate) fn load_asset_bytes(file_name: impl AsRef<Path>) -> std::io::Result<Vec<u8>> {
+    let asset_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("assets")
+        .join(file_name);
+
+    std::fs::read(asset_path)
 }
 
-macro_rules! asset_bytes {
-    ($path:expr) => {
-        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/", $path))
-    };
-}
+pub(crate) fn load_asset_string(file_name: impl AsRef<Path>) -> std::io::Result<String> {
+    let asset_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("assets")
+        .join(file_name);
 
-pub(crate) use asset_bytes;
-pub(crate) use asset_str;
+    std::fs::read_to_string(asset_path)
+}

@@ -4,7 +4,7 @@ use wgpu::Device;
 use wgpu::util::BufferInitDescriptor;
 use wgpu::util::DeviceExt;
 
-use crate::vertex::GpuVertex;
+use crate::model::GpuVertex;
 
 #[derive(Debug)]
 pub struct Mesh {

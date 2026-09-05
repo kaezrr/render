@@ -1,4 +1,4 @@
-use crate::vertex::Vertex;
+use crate::model::Vertex;
 
 #[rustfmt::skip]
 pub const TEXTURED_CUBE_VERTICES: &[Vertex] = &[

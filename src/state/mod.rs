@@ -16,8 +16,6 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
 
-use crate::asset_bytes;
-use crate::asset_str;
 use crate::camera::Camera;
 use crate::camera::CameraBundle;
 use crate::consts::INSTANCE_DISPLACEMENT;
@@ -26,13 +24,15 @@ use crate::consts::TEXTURED_CUBE_INDICES;
 use crate::consts::TEXTURED_CUBE_VERTICES;
 use crate::instance::Instance;
 use crate::instance::InstanceBundle;
+use crate::load_asset_bytes;
+use crate::load_asset_string;
 use crate::mesh::Mesh;
+use crate::model::Vertex;
 use crate::pipeline;
 use crate::state::gpu::GpuContext;
 use crate::texture;
 use crate::texture::Texture;
 use crate::texture::TextureBundle;
-use crate::vertex::Vertex;
 
 #[derive(Debug)]
 pub struct State<'a> {
@@ -71,7 +71,7 @@ impl State<'_> {
         let diffuse_texture = Texture::from_bytes(
             &gpu_context.device,
             &gpu_context.queue,
-            asset_bytes!("kirk-pray.png"),
+            &load_asset_bytes("kirk-pray.png")?,
             "happy_tree_texture",
         )?
         .with_bind_group(&gpu_context.device, &texture_bind_group_layout);
@@ -79,7 +79,7 @@ impl State<'_> {
         let render_pipeline = pipeline::create_render_pipeline::<Vertex>(
             &gpu_context.device,
             "colored",
-            asset_str!("shaders/shader.wgsl"),
+            &load_asset_string("shaders/shader.wgsl")?,
             gpu_context.config.format,
             &[
                 Some(&camera.bind_group_layout),

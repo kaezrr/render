@@ -20,7 +20,7 @@ use wgpu::TextureFormat;
 use wgpu::VertexState;
 
 use crate::instance::InstanceRaw;
-use crate::vertex::GpuVertex;
+use crate::model::GpuVertex;
 
 pub fn create_render_pipeline<V: GpuVertex>(
     device: &Device,
