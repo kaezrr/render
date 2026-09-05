@@ -30,7 +30,7 @@ impl Mesh {
         Self {
             vertex_buffer,
             index_buffer,
-            num_indices: u32::try_from(indices.len()).expect("number of indices fits within u32"),
+            num_indices: indices.len() as u32,
         }
     }
 }

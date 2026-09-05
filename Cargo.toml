@@ -5,16 +5,29 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
+bitflags = "2.13.1"
 bytemuck = "1.25.2"
 env_logger = "0.11.11"
 glam = "0.33.6"
 image = "0.25.10"
 log = "0.4.34"
 pollster = "1.0.1"
+tobj = "4.0.5"
 wgpu = "30.0.1"
 winit = "0.30.13"
 
 [lints.clippy]
-missing_const_for_fn = "warn"
-undocumented_unsafe_blocks = "forbid"
-unwrap_used = "forbid"
+pedantic = { level = "warn", priority = -1 }
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+todo = "warn"
+unimplemented = "warn"
+dbg_macro = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+std_instead_of_core = "warn"
+allow_attributes_without_reason = "warn"
+
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"

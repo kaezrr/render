@@ -1,45 +1,42 @@
-#![allow(unused)]
-
-use crate::vertex::TexturedVertex;
 use crate::vertex::Vertex;
 
 #[rustfmt::skip]
-pub const TEXTURED_CUBE_VERTICES: &[TexturedVertex] = &[
+pub const TEXTURED_CUBE_VERTICES: &[Vertex] = &[
     // Front face (+Z)
-    TexturedVertex { position: [-0.5, -0.5,  0.5], texture_coordinates: [0.0, 1.0] },
-    TexturedVertex { position: [ 0.5, -0.5,  0.5], texture_coordinates: [1.0, 1.0] },
-    TexturedVertex { position: [ 0.5,  0.5,  0.5], texture_coordinates: [1.0, 0.0] },
-    TexturedVertex { position: [-0.5,  0.5,  0.5], texture_coordinates: [0.0, 0.0] },
+    Vertex { position: [-0.5, -0.5,  0.5], texture_coordinates: [0.0, 1.0] },
+    Vertex { position: [ 0.5, -0.5,  0.5], texture_coordinates: [1.0, 1.0] },
+    Vertex { position: [ 0.5,  0.5,  0.5], texture_coordinates: [1.0, 0.0] },
+    Vertex { position: [-0.5,  0.5,  0.5], texture_coordinates: [0.0, 0.0] },
 
     // Back face (-Z)
-    TexturedVertex { position: [ 0.5, -0.5, -0.5], texture_coordinates: [0.0, 1.0] },
-    TexturedVertex { position: [-0.5, -0.5, -0.5], texture_coordinates: [1.0, 1.0] },
-    TexturedVertex { position: [-0.5,  0.5, -0.5], texture_coordinates: [1.0, 0.0] },
-    TexturedVertex { position: [ 0.5,  0.5, -0.5], texture_coordinates: [0.0, 0.0] },
+    Vertex { position: [ 0.5, -0.5, -0.5], texture_coordinates: [0.0, 1.0] },
+    Vertex { position: [-0.5, -0.5, -0.5], texture_coordinates: [1.0, 1.0] },
+    Vertex { position: [-0.5,  0.5, -0.5], texture_coordinates: [1.0, 0.0] },
+    Vertex { position: [ 0.5,  0.5, -0.5], texture_coordinates: [0.0, 0.0] },
 
     // Top face (+Y)
-    TexturedVertex { position: [-0.5,  0.5,  0.5], texture_coordinates: [0.0, 1.0] },
-    TexturedVertex { position: [ 0.5,  0.5,  0.5], texture_coordinates: [1.0, 1.0] },
-    TexturedVertex { position: [ 0.5,  0.5, -0.5], texture_coordinates: [1.0, 0.0] },
-    TexturedVertex { position: [-0.5,  0.5, -0.5], texture_coordinates: [0.0, 0.0] },
+    Vertex { position: [-0.5,  0.5,  0.5], texture_coordinates: [0.0, 1.0] },
+    Vertex { position: [ 0.5,  0.5,  0.5], texture_coordinates: [1.0, 1.0] },
+    Vertex { position: [ 0.5,  0.5, -0.5], texture_coordinates: [1.0, 0.0] },
+    Vertex { position: [-0.5,  0.5, -0.5], texture_coordinates: [0.0, 0.0] },
 
     // Bottom face (-Y)
-    TexturedVertex { position: [-0.5, -0.5, -0.5], texture_coordinates: [0.0, 1.0] },
-    TexturedVertex { position: [ 0.5, -0.5, -0.5], texture_coordinates: [1.0, 1.0] },
-    TexturedVertex { position: [ 0.5, -0.5,  0.5], texture_coordinates: [1.0, 0.0] },
-    TexturedVertex { position: [-0.5, -0.5,  0.5], texture_coordinates: [0.0, 0.0] },
+    Vertex { position: [-0.5, -0.5, -0.5], texture_coordinates: [0.0, 1.0] },
+    Vertex { position: [ 0.5, -0.5, -0.5], texture_coordinates: [1.0, 1.0] },
+    Vertex { position: [ 0.5, -0.5,  0.5], texture_coordinates: [1.0, 0.0] },
+    Vertex { position: [-0.5, -0.5,  0.5], texture_coordinates: [0.0, 0.0] },
 
     // Right face (+X)
-    TexturedVertex { position: [ 0.5, -0.5,  0.5], texture_coordinates: [0.0, 1.0] },
-    TexturedVertex { position: [ 0.5, -0.5, -0.5], texture_coordinates: [1.0, 1.0] },
-    TexturedVertex { position: [ 0.5,  0.5, -0.5], texture_coordinates: [1.0, 0.0] },
-    TexturedVertex { position: [ 0.5,  0.5,  0.5], texture_coordinates: [0.0, 0.0] },
+    Vertex { position: [ 0.5, -0.5,  0.5], texture_coordinates: [0.0, 1.0] },
+    Vertex { position: [ 0.5, -0.5, -0.5], texture_coordinates: [1.0, 1.0] },
+    Vertex { position: [ 0.5,  0.5, -0.5], texture_coordinates: [1.0, 0.0] },
+    Vertex { position: [ 0.5,  0.5,  0.5], texture_coordinates: [0.0, 0.0] },
 
     // Left face (-X)
-    TexturedVertex { position: [-0.5, -0.5, -0.5], texture_coordinates: [0.0, 1.0] },
-    TexturedVertex { position: [-0.5, -0.5,  0.5], texture_coordinates: [1.0, 1.0] },
-    TexturedVertex { position: [-0.5,  0.5,  0.5], texture_coordinates: [1.0, 0.0] },
-    TexturedVertex { position: [-0.5,  0.5, -0.5], texture_coordinates: [0.0, 0.0] },
+    Vertex { position: [-0.5, -0.5, -0.5], texture_coordinates: [0.0, 1.0] },
+    Vertex { position: [-0.5, -0.5,  0.5], texture_coordinates: [1.0, 1.0] },
+    Vertex { position: [-0.5,  0.5,  0.5], texture_coordinates: [1.0, 0.0] },
+    Vertex { position: [-0.5,  0.5, -0.5], texture_coordinates: [0.0, 0.0] },
 ];
 
 pub const TEXTURED_CUBE_INDICES: &[u16] = &[

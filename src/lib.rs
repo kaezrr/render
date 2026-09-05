@@ -39,6 +39,10 @@ impl Default for App {
 }
 
 impl ApplicationHandler for App {
+    #[expect(
+        clippy::expect_used,
+        reason = "Dont really have a good way of handling error here so rather crash"
+    )]
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = {
             let attributes = Window::default_attributes()

@@ -32,7 +32,7 @@ use crate::state::gpu::GpuContext;
 use crate::texture;
 use crate::texture::Texture;
 use crate::texture::TextureBundle;
-use crate::vertex::TexturedVertex;
+use crate::vertex::Vertex;
 
 #[derive(Debug)]
 pub struct State<'a> {
@@ -71,15 +71,15 @@ impl State<'_> {
         let diffuse_texture = Texture::from_bytes(
             &gpu_context.device,
             &gpu_context.queue,
-            asset_bytes!("happy-tree.png"),
+            asset_bytes!("kirk-pray.png"),
             "happy_tree_texture",
         )?
         .with_bind_group(&gpu_context.device, &texture_bind_group_layout);
 
-        let render_pipeline = pipeline::create_render_pipeline::<TexturedVertex>(
+        let render_pipeline = pipeline::create_render_pipeline::<Vertex>(
             &gpu_context.device,
             "colored",
-            asset_str!("shaders/texture.wgsl"),
+            asset_str!("shaders/shader.wgsl"),
             gpu_context.config.format,
             &[
                 Some(&camera.bind_group_layout),
@@ -214,7 +214,7 @@ impl State<'_> {
 
         self.gpu_context
             .queue
-            .submit(std::iter::once(command_encoder.finish()));
+            .submit(core::iter::once(command_encoder.finish()));
 
         self.gpu_context.queue.present(current_texture);
 

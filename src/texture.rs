@@ -10,9 +10,8 @@ use wgpu::wgt::SamplerDescriptor;
 use wgpu::wgt::TextureDescriptor;
 
 #[derive(Debug)]
-#[expect(unused)]
 pub struct Texture {
-    pub texture: wgpu::Texture,
+    pub _raw: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
 }
@@ -72,7 +71,7 @@ impl Texture {
         });
 
         Self {
-            texture,
+            _raw: texture,
             view,
             sampler,
         }
@@ -114,7 +113,7 @@ impl Texture {
         });
 
         Self {
-            texture,
+            _raw: texture,
             view,
             sampler,
         }
@@ -141,7 +140,7 @@ impl Texture {
         });
 
         TextureBundle {
-            texture: self,
+            _texture: self,
             bind_group,
         }
     }
@@ -149,7 +148,7 @@ impl Texture {
 
 #[derive(Debug)]
 pub struct TextureBundle {
-    pub texture: Texture,
+    pub _texture: Texture,
     pub bind_group: BindGroup,
 }
 

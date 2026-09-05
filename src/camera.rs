@@ -17,6 +17,16 @@ use wgpu::util::BufferInitDescriptor;
 use wgpu::util::DeviceExt;
 use winit::keyboard::KeyCode;
 
+bitflags::bitflags! {
+    #[derive(Debug)]
+    struct Movement: u8 {
+        const FORWARD   = 1 << 0;
+        const BACKWARD  = 1 << 1;
+        const LEFT      = 1 << 2;
+        const RIGHT     = 1 << 3;
+    }
+}
+
 #[derive(Debug)]
 pub struct Camera {
     pub eye: glam::Vec3,
@@ -69,29 +79,23 @@ impl CameraUniform {
 #[derive(Debug)]
 pub struct CameraController {
     speed: f32,
-    is_forward_pressed: bool,
-    is_backward_pressed: bool,
-    is_left_pressed: bool,
-    is_right_pressed: bool,
+    movement: Movement,
 }
 
 impl CameraController {
     const fn new(speed: f32) -> Self {
         Self {
             speed,
-            is_forward_pressed: false,
-            is_backward_pressed: false,
-            is_left_pressed: false,
-            is_right_pressed: false,
+            movement: Movement::empty(),
         }
     }
 
-    const fn handle_key(&mut self, code: KeyCode, is_pressed: bool) {
+    fn handle_key(&mut self, code: KeyCode, is_pressed: bool) {
         match code {
-            KeyCode::KeyW | KeyCode::ArrowUp => self.is_forward_pressed = is_pressed,
-            KeyCode::KeyS | KeyCode::ArrowDown => self.is_backward_pressed = is_pressed,
-            KeyCode::KeyA | KeyCode::ArrowLeft => self.is_left_pressed = is_pressed,
-            KeyCode::KeyD | KeyCode::ArrowRight => self.is_right_pressed = is_pressed,
+            KeyCode::KeyW | KeyCode::ArrowUp => self.movement.set(Movement::FORWARD, is_pressed),
+            KeyCode::KeyS | KeyCode::ArrowDown => self.movement.set(Movement::BACKWARD, is_pressed),
+            KeyCode::KeyA | KeyCode::ArrowLeft => self.movement.set(Movement::LEFT, is_pressed),
+            KeyCode::KeyD | KeyCode::ArrowRight => self.movement.set(Movement::RIGHT, is_pressed),
             _ => (),
         }
     }
@@ -99,11 +103,11 @@ impl CameraController {
     fn update_camera(&self, camera: &mut Camera, dt: f32) {
         let (forward, f_mag) = (camera.target - camera.eye).normalize_and_length();
 
-        if self.is_forward_pressed && f_mag > self.speed * dt {
+        if self.movement.contains(Movement::FORWARD) && f_mag > self.speed * dt {
             camera.eye += forward * self.speed * dt;
         }
 
-        if self.is_backward_pressed {
+        if self.movement.contains(Movement::BACKWARD) {
             camera.eye -= forward * self.speed * dt;
         }
 
@@ -111,10 +115,10 @@ impl CameraController {
         let forward = camera.target - camera.eye;
         let f_mag = forward.length();
 
-        if self.is_right_pressed {
+        if self.movement.contains(Movement::RIGHT) {
             camera.eye = camera.target - (forward + right * self.speed * dt).normalize() * f_mag;
         }
-        if self.is_left_pressed {
+        if self.movement.contains(Movement::LEFT) {
             camera.eye = camera.target - (forward - right * self.speed * dt).normalize() * f_mag;
         }
     }
@@ -180,7 +184,7 @@ impl CameraBundle {
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.uniform]));
     }
 
-    pub const fn handle_key(&mut self, code: KeyCode, is_pressed: bool) {
+    pub fn handle_key(&mut self, code: KeyCode, is_pressed: bool) {
         self.controller.handle_key(code, is_pressed);
     }
 }
