@@ -21,7 +21,6 @@ use crate::camera::Camera;
 use crate::camera::CameraBundle;
 use crate::instance::Instance;
 use crate::instance::InstanceBundle;
-use crate::load_asset_bytes;
 use crate::load_asset_string;
 use crate::model::DrawModel;
 use crate::model::Model;
@@ -30,7 +29,8 @@ use crate::parser::load_model_from_obj;
 use crate::pipeline;
 use crate::state::gpu::GpuContext;
 use crate::texture::Texture;
-use crate::texture::TextureBundle;
+
+const NUM_INSTANCES_PER_ROW: u32 = 10;
 
 #[derive(Debug)]
 pub struct State<'a> {
@@ -38,12 +38,10 @@ pub struct State<'a> {
     gpu_context: GpuContext<'a>,
 
     obj_model: Model,
-    render_pipeline: RenderPipeline,
     depth_texture: Texture,
-
     instance_bundle: InstanceBundle,
-    diffuse_texture: TextureBundle,
 
+    render_pipeline: RenderPipeline,
     camera: CameraBundle,
 }
 
@@ -90,14 +88,6 @@ impl State<'_> {
                     ],
                 });
 
-        let diffuse_texture = Texture::from_bytes(
-            &gpu_context.device,
-            &gpu_context.queue,
-            &load_asset_bytes("happy-tree.png")?,
-            "happy_tree_texture",
-        )?
-        .with_bind_group(&gpu_context.device, &texture_bind_group_layout);
-
         let render_pipeline = pipeline::create_render_pipeline::<ModelVertex>(
             &gpu_context.device,
             "colored",
@@ -109,8 +99,6 @@ impl State<'_> {
             ],
             Some(Texture::DEPTH_FORMAT),
         );
-
-        const NUM_INSTANCES_PER_ROW: u32 = 10;
 
         let instances = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {
@@ -157,12 +145,10 @@ impl State<'_> {
             gpu_context,
 
             obj_model,
-            render_pipeline,
             depth_texture,
-
             instance_bundle,
-            diffuse_texture,
 
+            render_pipeline,
             camera,
         })
     }
@@ -228,14 +214,12 @@ impl State<'_> {
         });
 
         render_pass.set_pipeline(&self.render_pipeline);
-
-        render_pass.set_bind_group(0, &self.camera.bind_group, &[]);
-        render_pass.set_bind_group(1, &self.diffuse_texture.bind_group, &[]);
-
         render_pass.set_vertex_buffer(1, self.instance_bundle.buffer.slice(..));
-        render_pass.draw_mesh_instanced(
-            &self.obj_model.meshes[0],
+
+        render_pass.draw_model_instanced(
+            &self.obj_model,
             0..self.instance_bundle.instances.len() as u32,
+            &self.camera.bind_group,
         );
 
         drop(render_pass);

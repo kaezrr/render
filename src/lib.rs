@@ -1,6 +1,5 @@
 mod camera;
 mod instance;
-mod mesh;
 mod model;
 mod parser;
 mod pipeline;

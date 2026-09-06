@@ -1,7 +1,4 @@
 use image::GenericImageView;
-use wgpu::BindGroup;
-use wgpu::BindGroupDescriptor;
-use wgpu::BindGroupLayout;
 use wgpu::Device;
 use wgpu::TextureUsages;
 use wgpu::util::DeviceExt;
@@ -117,36 +114,4 @@ impl Texture {
             sampler,
         }
     }
-
-    pub fn with_bind_group(
-        self,
-        device: &wgpu::Device,
-        bind_group_layout: &BindGroupLayout,
-    ) -> TextureBundle {
-        let bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some("diffuse_bind_group"),
-            layout: bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
-            ],
-        });
-
-        TextureBundle {
-            _texture: self,
-            bind_group,
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct TextureBundle {
-    pub _texture: Texture,
-    pub bind_group: BindGroup,
 }

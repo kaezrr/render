@@ -46,6 +46,7 @@ pub struct Model {
 }
 
 #[derive(Debug)]
+#[expect(unused, reason = "Material name is for debug purposes")]
 pub struct Material {
     pub name: String,
     pub diffuse_texture: Texture,
@@ -53,6 +54,7 @@ pub struct Material {
 }
 
 #[derive(Debug)]
+#[expect(unused, reason = "Mesh name is for debug purposes")]
 pub struct Mesh {
     pub name: String,
     pub vertex_buffer: wgpu::Buffer,
@@ -62,18 +64,60 @@ pub struct Mesh {
 }
 
 pub trait DrawModel {
-    fn draw_mesh(&mut self, mesh: &Mesh);
-    fn draw_mesh_instanced(&mut self, mesh: &Mesh, instances: Range<u32>);
+    fn draw_mesh(&mut self, mesh: &Mesh, material: &Material, camera_bind_group: &wgpu::BindGroup);
+
+    fn draw_mesh_instanced(
+        &mut self,
+        mesh: &Mesh,
+        material: &Material,
+        instances: Range<u32>,
+        camera_bind_group: &wgpu::BindGroup,
+    );
+
+    fn draw_model(&mut self, model: &Model, camera_bind_group: &wgpu::BindGroup);
+
+    fn draw_model_instanced(
+        &mut self,
+        model: &Model,
+        instances: Range<u32>,
+        camera_bind_group: &wgpu::BindGroup,
+    );
 }
 
 impl DrawModel for RenderPass<'_> {
-    fn draw_mesh(&mut self, mesh: &Mesh) {
-        self.draw_mesh_instanced(mesh, 0..1);
+    fn draw_mesh(&mut self, mesh: &Mesh, material: &Material, camera_bind_group: &wgpu::BindGroup) {
+        self.draw_mesh_instanced(mesh, material, 0..1, camera_bind_group);
     }
 
-    fn draw_mesh_instanced(&mut self, mesh: &Mesh, instances: Range<u32>) {
+    fn draw_mesh_instanced(
+        &mut self,
+        mesh: &Mesh,
+        material: &Material,
+        instances: Range<u32>,
+        camera_bind_group: &wgpu::BindGroup,
+    ) {
+        self.set_bind_group(0, camera_bind_group, &[]);
+        self.set_bind_group(1, &material.bind_group, &[]);
+
         self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+
         self.draw_indexed(0..mesh.num_indices, 0, instances);
+    }
+
+    fn draw_model(&mut self, model: &Model, camera_bind_group: &wgpu::BindGroup) {
+        self.draw_model_instanced(model, 0..1, camera_bind_group);
+    }
+
+    fn draw_model_instanced(
+        &mut self,
+        model: &Model,
+        instances: Range<u32>,
+        camera_bind_group: &wgpu::BindGroup,
+    ) {
+        for mesh in &model.meshes {
+            let material = &model.materials[mesh.material_id];
+            self.draw_mesh_instanced(mesh, material, instances.clone(), camera_bind_group);
+        }
     }
 }
