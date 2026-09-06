@@ -114,4 +114,21 @@ impl Texture {
             sampler,
         }
     }
+
+    pub fn create_default_texture_with_color(
+        device: &Device,
+        queue: &wgpu::Queue,
+        color: [f32; 3],
+        label: Option<&str>,
+    ) -> Self {
+        let pixel = image::Rgb(color);
+        let image = image::Rgb32FImage::from_pixel(1, 1, pixel);
+
+        Self::from_image(
+            device,
+            queue,
+            &image::DynamicImage::ImageRgb32F(image),
+            label,
+        )
+    }
 }

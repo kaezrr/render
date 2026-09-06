@@ -27,6 +27,7 @@ use crate::instance::InstanceRaw;
 use crate::load_asset_string;
 use crate::model::DrawModel;
 use crate::model::GpuVertex;
+use crate::model::Material;
 use crate::model::Model;
 use crate::model::ModelVertex;
 use crate::parser::load_model_from_obj;
@@ -42,6 +43,7 @@ pub struct State<'a> {
     obj_model: Model,
     depth_texture: Texture,
     instance_bundle: InstanceBundle,
+    default_material: Material,
 
     render_pipeline: RenderPipeline,
     camera: CameraBundle,
@@ -133,6 +135,38 @@ impl State<'_> {
             "models/cube/cube.obj",
         )?;
 
+        let default_material = {
+            let diffuse_texture = Texture::create_default_texture_with_color(
+                &gpu_context.device,
+                &gpu_context.queue,
+                [1.0, 0.0, 1.0],
+                Some("default render texture"),
+            );
+
+            let bind_group = gpu_context
+                .device
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("default_material_bind_group"),
+                    layout: &texture_bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
+                        },
+                    ],
+                });
+
+            Material {
+                name: "default render material".to_string(),
+                _diffuse_texture: diffuse_texture,
+                bind_group,
+            }
+        };
+
         Ok(Self {
             window,
             gpu_context,
@@ -140,6 +174,7 @@ impl State<'_> {
             obj_model,
             depth_texture,
             instance_bundle,
+            default_material,
 
             render_pipeline,
             camera,
@@ -211,6 +246,7 @@ impl State<'_> {
 
         render_pass.draw_model_instanced(
             &self.obj_model,
+            &self.default_material,
             0..self.instance_bundle.instances.len() as u32,
             &self.camera.bind_group,
         );

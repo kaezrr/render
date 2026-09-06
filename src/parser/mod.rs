@@ -86,7 +86,7 @@ where
 
         materials.push(Material {
             name: material.name,
-            diffuse_texture,
+            _diffuse_texture: diffuse_texture,
             bind_group,
         });
     }
@@ -150,7 +150,7 @@ fn construct_meshes(device: &wgpu::Device, obj: &ParsedObj) -> anyhow::Result<Ve
                 vertex_buffer,
                 index_buffer,
                 num_indices: indices.len() as u32,
-                material_id: material_id.unwrap_or(0),
+                material_id,
             });
         }
     }
@@ -232,8 +232,7 @@ where
             // Model begin
             "o" => parsed_obj.objects.push(Object {
                 name: tokens[1].to_owned(),
-                faces: vec![],
-                faces_material_id: vec![],
+                ..Default::default()
             }),
 
             // Material file
@@ -276,8 +275,7 @@ fn parse_mtl_file(file_str: &str) -> anyhow::Result<Vec<ObjectMaterial>> {
             // New Material
             "newmtl" => parsed_materials.push(ObjectMaterial {
                 name: tokens[1].to_owned(),
-                normal_map: None,
-                diffuse_map: None,
+                ..Default::default()
             }),
 
             "map_Bump" => {
@@ -294,6 +292,19 @@ fn parse_mtl_file(file_str: &str) -> anyhow::Result<Vec<ObjectMaterial>> {
                     .diffuse_map = Some(tokens[1].to_owned());
             }
 
+            #[rustfmt::skip]
+            // Diffuse color
+            "Kd" => {
+                parsed_materials
+                    .last_mut()
+                    .ok_or(anyhow::anyhow!("diffuse color without parent material"))?
+                    .diffuse_color = Some([
+                        tokens[1].parse()?,
+                        tokens[2].parse()?,
+                        tokens[3].parse()?
+                    ]);
+            }
+
             // Comment
             "#" => {}
 
@@ -302,8 +313,6 @@ fn parse_mtl_file(file_str: &str) -> anyhow::Result<Vec<ObjectMaterial>> {
             "Ns" => warn!("obj_parser: ignoring specular color exponent 'Ns'"),
 
             "Ka" => warn!("obj_parser: ignoring ambient color 'Ka'"),
-
-            "Kd" => warn!("obj_parser: ignoring diffuse color 'Kd'"),
 
             "Ke" => warn!("obj_parser: ignoring emissive color 'Ke'"),
 
@@ -330,7 +339,7 @@ struct ParsedObj {
     materials: Vec<ObjectMaterial>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Object {
     name: String,
     faces: Vec<Vec<Index>>,
@@ -344,11 +353,12 @@ struct Index {
     normal: Option<i32>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct ObjectMaterial {
     name: String,
     normal_map: Option<String>,
     diffuse_map: Option<String>,
+    diffuse_color: Option<[f32; 3]>,
 }
 
 /// Get at an offset starting from 1

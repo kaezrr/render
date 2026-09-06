@@ -46,21 +46,21 @@ pub struct Model {
 }
 
 #[derive(Debug)]
-#[expect(unused, reason = "Material name is for debug purposes")]
 pub struct Material {
+    #[expect(unused, reason = "Material name is for debug purposes")]
     pub name: String,
-    pub diffuse_texture: Texture,
+    pub _diffuse_texture: Texture,
     pub bind_group: wgpu::BindGroup,
 }
 
 #[derive(Debug)]
-#[expect(unused, reason = "Mesh name is for debug purposes")]
 pub struct Mesh {
+    #[expect(unused, reason = "Mesh name is for debug purposes")]
     pub name: String,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub num_indices: u32,
-    pub material_id: usize,
+    pub material_id: Option<usize>,
 }
 
 pub trait DrawModel {
@@ -74,11 +74,17 @@ pub trait DrawModel {
         camera_bind_group: &wgpu::BindGroup,
     );
 
-    fn draw_model(&mut self, model: &Model, camera_bind_group: &wgpu::BindGroup);
+    fn draw_model(
+        &mut self,
+        model: &Model,
+        default_material: &Material,
+        camera_bind_group: &wgpu::BindGroup,
+    );
 
     fn draw_model_instanced(
         &mut self,
         model: &Model,
+        default_material: &Material,
         instances: Range<u32>,
         camera_bind_group: &wgpu::BindGroup,
     );
@@ -105,18 +111,27 @@ impl DrawModel for RenderPass<'_> {
         self.draw_indexed(0..mesh.num_indices, 0, instances);
     }
 
-    fn draw_model(&mut self, model: &Model, camera_bind_group: &wgpu::BindGroup) {
-        self.draw_model_instanced(model, 0..1, camera_bind_group);
+    fn draw_model(
+        &mut self,
+        model: &Model,
+        default_material: &Material,
+        camera_bind_group: &wgpu::BindGroup,
+    ) {
+        self.draw_model_instanced(model, default_material, 0..1, camera_bind_group);
     }
 
     fn draw_model_instanced(
         &mut self,
         model: &Model,
+        default_material: &Material,
         instances: Range<u32>,
         camera_bind_group: &wgpu::BindGroup,
     ) {
         for mesh in &model.meshes {
-            let material = &model.materials[mesh.material_id];
+            let material = mesh
+                .material_id
+                .map_or(default_material, |i| &model.materials[i]);
+
             self.draw_mesh_instanced(mesh, material, instances.clone(), camera_bind_group);
         }
     }
