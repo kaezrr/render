@@ -60,13 +60,12 @@ where
     let mut materials: Vec<Material> = Vec::new();
 
     for material in object_materials {
-        // TODO: Dont skip materials without a diffuse texture
-        let Some(diffuse_texture_map) = material.diffuse_map else {
-            continue;
+        let diffuse_texture = if let Some(diffuse_texture_map) = material.diffuse_map {
+            let texture_bytes = read_texture(&diffuse_texture_map)?;
+            Texture::from_bytes(device, queue, &texture_bytes, &material.name)?
+        } else {
+            Texture::from_solid_color(device, queue, material.diffuse_color, Some(&material.name))
         };
-
-        let texture_bytes = read_texture(&diffuse_texture_map)?;
-        let diffuse_texture = Texture::from_bytes(device, queue, &texture_bytes, &material.name)?;
 
         let bind_group = diffuse_texture.create_bind_group(
             device,
@@ -264,6 +263,7 @@ fn parse_mtl_file(file_str: &str) -> anyhow::Result<Vec<ObjectMaterial>> {
             // New Material
             "newmtl" => parsed_materials.push(ObjectMaterial {
                 name: tokens[1].to_owned(),
+                diffuse_color: [1.0, 1.0, 1.0],
                 ..Default::default()
             }),
 
@@ -287,11 +287,11 @@ fn parse_mtl_file(file_str: &str) -> anyhow::Result<Vec<ObjectMaterial>> {
                 parsed_materials
                     .last_mut()
                     .ok_or(anyhow::anyhow!("diffuse color without parent material"))?
-                    .diffuse_color = Some([
+                    .diffuse_color = [
                         tokens[1].parse()?,
                         tokens[2].parse()?,
                         tokens[3].parse()?
-                    ]);
+                    ];
             }
 
             // Comment
@@ -347,7 +347,7 @@ struct ObjectMaterial {
     name: String,
     normal_map: Option<String>,
     diffuse_map: Option<String>,
-    diffuse_color: Option<[f32; 3]>,
+    diffuse_color: [f32; 3],
 }
 
 /// Get at an offset starting from 1

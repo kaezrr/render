@@ -132,7 +132,7 @@ impl State<'_> {
             &gpu_context.device,
             &gpu_context.queue,
             &texture_bind_group_layout,
-            "models/cube/cube.obj",
+            "models/donut/donut.obj",
         )?;
 
         let default_material = create_default_material(&gpu_context, &texture_bind_group_layout);
@@ -235,7 +235,7 @@ impl State<'_> {
     pub fn update(&mut self, dt: f32) {
         self.camera.update(&self.gpu_context.queue, dt);
 
-        let angle = f32::to_radians(30.0) * dt;
+        let angle = f32::to_radians(0.0) * dt;
         let axis = Vec3::new(1.0, 1.0, 0.0).normalize();
         let rotation = Quat::from_axis_angle(axis, angle);
 
@@ -260,7 +260,7 @@ impl State<'_> {
 }
 
 fn create_default_material(gpu_context: &GpuContext, layout: &wgpu::BindGroupLayout) -> Material {
-    let diffuse_texture = Texture::create_default_texture_with_color(
+    let diffuse_texture = Texture::from_solid_color(
         &gpu_context.device,
         &gpu_context.queue,
         [1.0, 0.0, 1.0],

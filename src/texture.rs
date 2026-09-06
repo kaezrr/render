@@ -106,7 +106,7 @@ impl Texture {
         Self { view, sampler }
     }
 
-    pub fn create_default_texture_with_color(
+    pub fn from_solid_color(
         device: &Device,
         queue: &wgpu::Queue,
         color: [f32; 3],
