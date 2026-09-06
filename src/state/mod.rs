@@ -3,12 +3,10 @@ mod gpu;
 use std::sync::Arc;
 
 use glam::Quat;
-use glam::Vec3;
 use log::warn;
 use wgpu::BindGroupLayoutDescriptor;
 use wgpu::Color;
 use wgpu::Operations;
-use wgpu::PipelineLayout;
 use wgpu::PipelineLayoutDescriptor;
 use wgpu::RenderPassColorAttachment;
 use wgpu::RenderPassDescriptor;
@@ -35,8 +33,6 @@ use crate::pipeline;
 use crate::state::gpu::GpuContext;
 use crate::texture::Texture;
 
-const NUM_INSTANCES_PER_ROW: u32 = 10;
-
 #[derive(Debug)]
 pub struct State<'a> {
     window: Arc<Window>,
@@ -57,7 +53,7 @@ impl State<'_> {
         let camera = CameraBundle::new(
             &gpu_context.device,
             Camera {
-                eye: (0.0, 1.0, 2.0).into(),
+                eye: (0.0, 3.0, 6.0).into(),
                 target: (0.0, 0.0, 0.0).into(),
                 up: glam::Vec3::Y,
                 aspect_ratio: gpu_context.config.width as f32 / gpu_context.config.height as f32,
@@ -95,8 +91,8 @@ impl State<'_> {
 
         let render_pipeline = {
             let shader = ShaderModuleDescriptor {
-                label: Some("shader.wgsl"),
-                source: wgpu::ShaderSource::Wgsl(load_asset_string("shaders/shader.wgsl")?.into()),
+                label: Some("model.wgsl"),
+                source: wgpu::ShaderSource::Wgsl(load_asset_string("shaders/model.wgsl")?.into()),
             };
 
             let render_pipeline_layout =
@@ -121,32 +117,7 @@ impl State<'_> {
             )
         };
 
-        let instances = (0..NUM_INSTANCES_PER_ROW)
-            .flat_map(|z| {
-                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    const SPACE_BETWEEN: f32 = 3.0;
-
-                    let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                    let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-
-                    let position = Vec3::new(x, 0.0, z);
-
-                    let rotation = if position == Vec3::ZERO {
-                        Quat::from_rotation_z(0.0)
-                    } else {
-                        Quat::from_rotation_z(45.0f32.to_radians())
-                    };
-
-                    Instance {
-                        position,
-                        rotation,
-                        scale: Vec3::ONE * 0.6,
-                    }
-                })
-            })
-            .collect::<Vec<_>>();
-
-        let instance_bundle = InstanceBundle::new(&gpu_context.device, instances);
+        let instance_bundle = InstanceBundle::new(&gpu_context.device, vec![Instance::SINGLE]);
 
         let depth_texture = Texture::create_depth_texture(
             &gpu_context.device,
@@ -260,9 +231,9 @@ impl State<'_> {
         let rotation_speed = f32::to_radians(20.0) * dt;
         for (i, instance) in self.instance_bundle.instances.iter_mut().enumerate() {
             let rotation = if i % 2 == 0 {
-                Quat::from_rotation_x(rotation_speed)
-            } else {
                 Quat::from_rotation_y(rotation_speed)
+            } else {
+                Quat::from_rotation_x(rotation_speed)
             };
 
             instance.rotation *= rotation;
