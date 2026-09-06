@@ -135,37 +135,7 @@ impl State<'_> {
             "models/cube/cube.obj",
         )?;
 
-        let default_material = {
-            let diffuse_texture = Texture::create_default_texture_with_color(
-                &gpu_context.device,
-                &gpu_context.queue,
-                [1.0, 0.0, 1.0],
-                Some("default render texture"),
-            );
-
-            let bind_group = gpu_context
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("default_material_bind_group"),
-                    layout: &texture_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                        },
-                    ],
-                });
-
-            Material {
-                name: "default render material".to_string(),
-                _diffuse_texture: diffuse_texture,
-                bind_group,
-            }
-        };
+        let default_material = create_default_material(&gpu_context, &texture_bind_group_layout);
 
         Ok(Self {
             window,
@@ -286,5 +256,25 @@ impl State<'_> {
 
     pub fn resize_surface(&mut self, width: u32, height: u32) {
         self.gpu_context.resize_surface(width, height);
+    }
+}
+
+fn create_default_material(gpu_context: &GpuContext, layout: &wgpu::BindGroupLayout) -> Material {
+    let diffuse_texture = Texture::create_default_texture_with_color(
+        &gpu_context.device,
+        &gpu_context.queue,
+        [1.0, 0.0, 1.0],
+        Some("default render texture"),
+    );
+
+    let bind_group = diffuse_texture.create_bind_group(
+        &gpu_context.device,
+        layout,
+        Some("Bind Group: default_material"),
+    );
+
+    Material {
+        name: "default render material".to_string(),
+        bind_group,
     }
 }

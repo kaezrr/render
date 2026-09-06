@@ -3,7 +3,6 @@ use std::path::Path;
 
 use anyhow::Result;
 use log::warn;
-use wgpu::BindGroupDescriptor;
 use wgpu::BindGroupLayout;
 use wgpu::util::BufferInitDescriptor;
 use wgpu::util::DeviceExt;
@@ -66,27 +65,17 @@ where
             continue;
         };
 
-        let dtexture_bytes = read_texture(&diffuse_texture_map)?;
-        let diffuse_texture = Texture::from_bytes(device, queue, &dtexture_bytes, &material.name)?;
+        let texture_bytes = read_texture(&diffuse_texture_map)?;
+        let diffuse_texture = Texture::from_bytes(device, queue, &texture_bytes, &material.name)?;
 
-        let bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: Some(&format!("Bind Group: {}", material.name)),
+        let bind_group = diffuse_texture.create_bind_group(
+            device,
             layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                },
-            ],
-        });
+            Some(&format!("Bind Group: {}", material.name)),
+        );
 
         materials.push(Material {
             name: material.name,
-            _diffuse_texture: diffuse_texture,
             bind_group,
         });
     }

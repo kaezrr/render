@@ -7,8 +7,6 @@ use wgpu::RenderPass;
 use wgpu::VertexAttribute;
 use wgpu::VertexBufferLayout;
 
-use crate::texture::Texture;
-
 pub trait GpuVertex: NoUninit {
     fn desc() -> VertexBufferLayout<'static>;
 }
@@ -49,7 +47,6 @@ pub struct Model {
 pub struct Material {
     #[expect(unused, reason = "Material name is for debug purposes")]
     pub name: String,
-    pub _diffuse_texture: Texture,
     pub bind_group: wgpu::BindGroup,
 }
 

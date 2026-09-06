@@ -7,7 +7,6 @@ use wgpu::wgt::TextureDescriptor;
 
 #[derive(Debug)]
 pub struct Texture {
-    pub _raw: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
 }
@@ -66,11 +65,7 @@ impl Texture {
             ..Default::default()
         });
 
-        Self {
-            _raw: texture,
-            view,
-            sampler,
-        }
+        Self { view, sampler }
     }
 
     pub fn create_depth_texture(
@@ -108,11 +103,7 @@ impl Texture {
             ..Default::default()
         });
 
-        Self {
-            _raw: texture,
-            view,
-            sampler,
-        }
+        Self { view, sampler }
     }
 
     pub fn create_default_texture_with_color(
@@ -130,5 +121,27 @@ impl Texture {
             &image::DynamicImage::ImageRgb32F(image),
             label,
         )
+    }
+
+    pub fn create_bind_group(
+        &self,
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        label: Option<&str>,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label,
+            layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler),
+                },
+            ],
+        })
     }
 }
