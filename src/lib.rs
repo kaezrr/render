@@ -1,5 +1,4 @@
 mod camera;
-mod consts;
 mod instance;
 mod mesh;
 mod model;

@@ -2,7 +2,6 @@ use image::GenericImageView;
 use wgpu::BindGroup;
 use wgpu::BindGroupDescriptor;
 use wgpu::BindGroupLayout;
-use wgpu::BindGroupLayoutDescriptor;
 use wgpu::Device;
 use wgpu::TextureUsages;
 use wgpu::util::DeviceExt;
@@ -150,28 +149,4 @@ impl Texture {
 pub struct TextureBundle {
     pub _texture: Texture,
     pub bind_group: BindGroup,
-}
-
-pub fn texture_bind_group_layout(device: &Device) -> BindGroupLayout {
-    device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-        label: Some("texture_bind_group_layout"),
-        entries: &[
-            wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Texture {
-                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    view_dimension: wgpu::TextureViewDimension::D2,
-                    multisampled: false,
-                },
-                count: None,
-            },
-            wgpu::BindGroupLayoutEntry {
-                binding: 1,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                count: None,
-            },
-        ],
-    })
 }

@@ -1,6 +1,9 @@
+use core::ops::Range;
+
 use bytemuck::NoUninit;
 use bytemuck::Pod;
 use bytemuck::Zeroable;
+use wgpu::RenderPass;
 use wgpu::VertexAttribute;
 use wgpu::VertexBufferLayout;
 
@@ -8,30 +11,6 @@ use crate::texture::Texture;
 
 pub trait GpuVertex: NoUninit {
     fn desc() -> VertexBufferLayout<'static>;
-}
-
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
-pub struct Vertex {
-    pub position: [f32; 3],
-    pub texture_coordinates: [f32; 2],
-}
-
-impl Vertex {
-    const ATTRIBS: &[VertexAttribute] = &wgpu::vertex_attr_array![
-        0 => Float32x3,
-        1 => Float32x2,
-    ];
-}
-
-impl GpuVertex for Vertex {
-    fn desc() -> VertexBufferLayout<'static> {
-        VertexBufferLayout {
-            array_stride: core::mem::size_of::<Self>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: Self::ATTRIBS,
-        }
-    }
 }
 
 #[repr(C)]
@@ -80,4 +59,21 @@ pub struct Mesh {
     pub index_buffer: wgpu::Buffer,
     pub num_indices: u32,
     pub material_id: usize,
+}
+
+pub trait DrawModel {
+    fn draw_mesh(&mut self, mesh: &Mesh);
+    fn draw_mesh_instanced(&mut self, mesh: &Mesh, instances: Range<u32>);
+}
+
+impl DrawModel for RenderPass<'_> {
+    fn draw_mesh(&mut self, mesh: &Mesh) {
+        self.draw_mesh_instanced(mesh, 0..1);
+    }
+
+    fn draw_mesh_instanced(&mut self, mesh: &Mesh, instances: Range<u32>) {
+        self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+        self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+        self.draw_indexed(0..mesh.num_indices, 0, instances);
+    }
 }

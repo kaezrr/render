@@ -5,6 +5,7 @@ use std::sync::Arc;
 use glam::Quat;
 use glam::Vec3;
 use log::warn;
+use wgpu::BindGroupLayoutDescriptor;
 use wgpu::Color;
 use wgpu::Operations;
 use wgpu::RenderPassColorAttachment;
@@ -18,19 +19,16 @@ use winit::window::Window;
 
 use crate::camera::Camera;
 use crate::camera::CameraBundle;
-use crate::consts::INSTANCE_DISPLACEMENT;
-use crate::consts::NUM_INSTANCES_PER_ROW;
-use crate::consts::TEXTURED_CUBE_INDICES;
-use crate::consts::TEXTURED_CUBE_VERTICES;
 use crate::instance::Instance;
 use crate::instance::InstanceBundle;
 use crate::load_asset_bytes;
 use crate::load_asset_string;
-use crate::mesh::Mesh;
-use crate::model::Vertex;
+use crate::model::DrawModel;
+use crate::model::Model;
+use crate::model::ModelVertex;
+use crate::parser::load_model_from_obj;
 use crate::pipeline;
 use crate::state::gpu::GpuContext;
-use crate::texture;
 use crate::texture::Texture;
 use crate::texture::TextureBundle;
 
@@ -39,12 +37,13 @@ pub struct State<'a> {
     window: Arc<Window>,
     gpu_context: GpuContext<'a>,
 
+    obj_model: Model,
     render_pipeline: RenderPipeline,
-    instance_bundle: InstanceBundle,
-    diffuse_texture: TextureBundle,
     depth_texture: Texture,
 
-    mesh: Mesh,
+    instance_bundle: InstanceBundle,
+    diffuse_texture: TextureBundle,
+
     camera: CameraBundle,
 }
 
@@ -66,17 +65,40 @@ impl State<'_> {
             5.0,
         );
 
-        let texture_bind_group_layout = texture::texture_bind_group_layout(&gpu_context.device);
+        let texture_bind_group_layout =
+            gpu_context
+                .device
+                .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                    label: Some("texture_bind_group_layout"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Texture {
+                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                                view_dimension: wgpu::TextureViewDimension::D2,
+                                multisampled: false,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                            count: None,
+                        },
+                    ],
+                });
 
         let diffuse_texture = Texture::from_bytes(
             &gpu_context.device,
             &gpu_context.queue,
-            &load_asset_bytes("kirk-pray.png")?,
+            &load_asset_bytes("happy-tree.png")?,
             "happy_tree_texture",
         )?
         .with_bind_group(&gpu_context.device, &texture_bind_group_layout);
 
-        let render_pipeline = pipeline::create_render_pipeline::<Vertex>(
+        let render_pipeline = pipeline::create_render_pipeline::<ModelVertex>(
             &gpu_context.device,
             "colored",
             &load_asset_string("shaders/shader.wgsl")?,
@@ -88,16 +110,18 @@ impl State<'_> {
             Some(Texture::DEPTH_FORMAT),
         );
 
-        let mesh = Mesh::new(
-            &gpu_context.device,
-            TEXTURED_CUBE_VERTICES,
-            TEXTURED_CUBE_INDICES,
-        );
+        const NUM_INSTANCES_PER_ROW: u32 = 10;
 
         let instances = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {
                 (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let position = Vec3::new(x as f32, 0.0, z as f32) - INSTANCE_DISPLACEMENT;
+                    const SPACE_BETWEEN: f32 = 3.0;
+
+                    let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                    let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+
+                    let position = Vec3::new(x, 0.0, z);
+
                     let rotation = if position == Vec3::ZERO {
                         Quat::from_rotation_z(0.0)
                     } else {
@@ -121,16 +145,24 @@ impl State<'_> {
             "depth_texture",
         );
 
+        let obj_model = load_model_from_obj(
+            &gpu_context.device,
+            &gpu_context.queue,
+            &texture_bind_group_layout,
+            "models/cube/cube.obj",
+        )?;
+
         Ok(Self {
             window,
             gpu_context,
 
+            obj_model,
             render_pipeline,
-            instance_bundle,
-            diffuse_texture,
             depth_texture,
 
-            mesh,
+            instance_bundle,
+            diffuse_texture,
+
             camera,
         })
     }
@@ -200,14 +232,10 @@ impl State<'_> {
         render_pass.set_bind_group(0, &self.camera.bind_group, &[]);
         render_pass.set_bind_group(1, &self.diffuse_texture.bind_group, &[]);
 
-        render_pass.set_vertex_buffer(0, self.mesh.vertex_buffer.slice(..));
         render_pass.set_vertex_buffer(1, self.instance_bundle.buffer.slice(..));
-        render_pass.set_index_buffer(self.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-
-        render_pass.draw_indexed(
-            0..self.mesh.num_indices,
-            0,
-            0..self.instance_bundle.instances.len() as _,
+        render_pass.draw_mesh_instanced(
+            &self.obj_model.meshes[0],
+            0..self.instance_bundle.instances.len() as u32,
         );
 
         drop(render_pass);
@@ -224,7 +252,7 @@ impl State<'_> {
     pub fn update(&mut self, dt: f32) {
         self.camera.update(&self.gpu_context.queue, dt);
 
-        let rotation_speed = f32::to_radians(100.0) * dt;
+        let rotation_speed = f32::to_radians(20.0) * dt;
         for (i, instance) in self.instance_bundle.instances.iter_mut().enumerate() {
             let rotation = if i % 2 == 0 {
                 Quat::from_rotation_x(rotation_speed)
