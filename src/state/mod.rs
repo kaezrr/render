@@ -3,6 +3,7 @@ mod gpu;
 use std::sync::Arc;
 
 use glam::Quat;
+use glam::Vec3;
 use log::warn;
 use wgpu::BindGroupLayoutDescriptor;
 use wgpu::Color;
@@ -228,14 +229,11 @@ impl State<'_> {
     pub fn update(&mut self, dt: f32) {
         self.camera.update(&self.gpu_context.queue, dt);
 
-        let rotation_speed = f32::to_radians(20.0) * dt;
-        for (i, instance) in self.instance_bundle.instances.iter_mut().enumerate() {
-            let rotation = if i % 2 == 0 {
-                Quat::from_rotation_y(rotation_speed)
-            } else {
-                Quat::from_rotation_x(rotation_speed)
-            };
+        let angle = f32::to_radians(30.0) * dt;
+        let axis = Vec3::new(1.0, 1.0, 0.0).normalize();
+        let rotation = Quat::from_axis_angle(axis, angle);
 
+        for instance in &mut self.instance_bundle.instances {
             instance.rotation *= rotation;
         }
 
