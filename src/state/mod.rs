@@ -256,6 +256,11 @@ impl State<'_> {
 
     pub fn resize_surface(&mut self, width: u32, height: u32) {
         self.gpu_context.resize_surface(width, height);
+        self.depth_texture = Texture::create_depth_texture(
+            &self.gpu_context.device,
+            &self.gpu_context.config,
+            "depth_texture",
+        );
     }
 }
 
