@@ -69,7 +69,7 @@ pub struct Model {
 #[derive(Debug)]
 pub struct Material {
     pub name: String,
-    pub texture: Texture,
+    pub diffuse_texture: Texture,
     pub bind_group: wgpu::BindGroup,
 }
 
@@ -79,5 +79,5 @@ pub struct Mesh {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub num_indices: u32,
-    pub material: u32,
+    pub material_id: usize,
 }
