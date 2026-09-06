@@ -137,7 +137,7 @@ impl State<'_> {
             &gpu_context.device,
             &gpu_context.queue,
             &texture_bind_group_layout,
-            "models/cube/cube.obj",
+            "models/moon/moon.obj",
         )?;
 
         Ok(Self {

@@ -249,6 +249,9 @@ where
             // Smoothing Group
             "s" => warn!("obj_parser: ignoring smoothing group 's'"),
 
+            // Line Element
+            "l" => warn!("obj_parser: ignoring polyline 'l'"),
+
             // Comment
             "#" => {}
 

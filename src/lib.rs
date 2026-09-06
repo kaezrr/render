@@ -39,10 +39,6 @@ impl Default for App {
 }
 
 impl ApplicationHandler for App {
-    #[expect(
-        clippy::expect_used,
-        reason = "Dont really have a good way of handling error here so rather crash"
-    )]
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = {
             let attributes = Window::default_attributes()
@@ -52,13 +48,12 @@ impl ApplicationHandler for App {
             Arc::new(
                 event_loop
                     .create_window(attributes)
-                    .expect("window successfully initialized"),
+                    .expect("window should be initialized"),
             )
         };
 
         self.state = Some(
-            pollster::block_on(State::new(window))
-                .expect("renderer state successfully initialized"),
+            pollster::block_on(State::new(window)).expect("renderer state should be initialized"),
         );
 
         info!("Window initialized!");
