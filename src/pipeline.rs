@@ -1,4 +1,3 @@
-use wgpu::BindGroupLayout;
 use wgpu::BlendState;
 use wgpu::ColorTargetState;
 use wgpu::ColorWrites;
@@ -9,7 +8,6 @@ use wgpu::Face;
 use wgpu::FragmentState;
 use wgpu::FrontFace;
 use wgpu::MultisampleState;
-use wgpu::PipelineLayoutDescriptor;
 use wgpu::PolygonMode;
 use wgpu::PrimitiveState;
 use wgpu::PrimitiveTopology;
@@ -19,36 +17,24 @@ use wgpu::ShaderModuleDescriptor;
 use wgpu::TextureFormat;
 use wgpu::VertexState;
 
-use crate::instance::InstanceRaw;
-use crate::model::GpuVertex;
-
-pub fn create_render_pipeline<V: GpuVertex>(
+pub fn create_render_pipeline(
     device: &Device,
-    label: &str,
-    shader_source: &str,
-    surface_format: TextureFormat,
-    bind_group_layouts: &[Option<&BindGroupLayout>],
+    layout: &wgpu::PipelineLayout,
+    color_format: TextureFormat,
     depth_stencil_format: Option<TextureFormat>,
+    vertex_layouts: &[Option<wgpu::VertexBufferLayout>],
+    shader: ShaderModuleDescriptor,
 ) -> RenderPipeline {
-    let shader_module = device.create_shader_module(ShaderModuleDescriptor {
-        label: Some(label),
-        source: wgpu::ShaderSource::Wgsl(shader_source.into()),
-    });
-
-    let render_pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-        label: Some("render_pipeline_layout"),
-        bind_group_layouts,
-        immediate_size: 0,
-    });
+    let shader_module = device.create_shader_module(shader);
 
     device.create_render_pipeline(&RenderPipelineDescriptor {
         label: Some("render_pipeline"),
-        layout: Some(&render_pipeline_layout),
+        layout: Some(layout),
         vertex: VertexState {
             module: &shader_module,
             entry_point: Some("vs_main"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
-            buffers: &[Some(V::desc()), Some(InstanceRaw::desc())],
+            buffers: vertex_layouts,
         },
 
         primitive: PrimitiveState {
@@ -80,7 +66,7 @@ pub fn create_render_pipeline<V: GpuVertex>(
             entry_point: Some("fs_main"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             targets: &[Some(ColorTargetState {
-                format: surface_format,
+                format: color_format,
                 blend: Some(BlendState::REPLACE),
                 write_mask: ColorWrites::ALL,
             })],

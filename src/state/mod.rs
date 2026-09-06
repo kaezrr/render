@@ -8,9 +8,12 @@ use log::warn;
 use wgpu::BindGroupLayoutDescriptor;
 use wgpu::Color;
 use wgpu::Operations;
+use wgpu::PipelineLayout;
+use wgpu::PipelineLayoutDescriptor;
 use wgpu::RenderPassColorAttachment;
 use wgpu::RenderPassDescriptor;
 use wgpu::RenderPipeline;
+use wgpu::ShaderModuleDescriptor;
 use wgpu::wgt::CommandEncoderDescriptor;
 use wgpu::wgt::TextureViewDescriptor;
 use winit::event_loop::ActiveEventLoop;
@@ -21,8 +24,10 @@ use crate::camera::Camera;
 use crate::camera::CameraBundle;
 use crate::instance::Instance;
 use crate::instance::InstanceBundle;
+use crate::instance::InstanceRaw;
 use crate::load_asset_string;
 use crate::model::DrawModel;
+use crate::model::GpuVertex;
 use crate::model::Model;
 use crate::model::ModelVertex;
 use crate::parser::load_model_from_obj;
@@ -88,17 +93,33 @@ impl State<'_> {
                     ],
                 });
 
-        let render_pipeline = pipeline::create_render_pipeline::<ModelVertex>(
-            &gpu_context.device,
-            "colored",
-            &load_asset_string("shaders/shader.wgsl")?,
-            gpu_context.config.format,
-            &[
-                Some(&camera.bind_group_layout),
-                Some(&texture_bind_group_layout),
-            ],
-            Some(Texture::DEPTH_FORMAT),
-        );
+        let render_pipeline = {
+            let shader = ShaderModuleDescriptor {
+                label: Some("shader.wgsl"),
+                source: wgpu::ShaderSource::Wgsl(load_asset_string("shaders/shader.wgsl")?.into()),
+            };
+
+            let render_pipeline_layout =
+                gpu_context
+                    .device
+                    .create_pipeline_layout(&PipelineLayoutDescriptor {
+                        label: Some("render_pipeline_layout"),
+                        immediate_size: 0,
+                        bind_group_layouts: &[
+                            Some(&camera.bind_group_layout),
+                            Some(&texture_bind_group_layout),
+                        ],
+                    });
+
+            pipeline::create_render_pipeline(
+                &gpu_context.device,
+                &render_pipeline_layout,
+                gpu_context.config.format,
+                Some(Texture::DEPTH_FORMAT),
+                &[Some(ModelVertex::desc()), Some(InstanceRaw::desc())],
+                shader,
+            )
+        };
 
         let instances = (0..NUM_INSTANCES_PER_ROW)
             .flat_map(|z| {
@@ -137,7 +158,7 @@ impl State<'_> {
             &gpu_context.device,
             &gpu_context.queue,
             &texture_bind_group_layout,
-            "models/moon/moon.obj",
+            "models/cube/cube.obj",
         )?;
 
         Ok(Self {
