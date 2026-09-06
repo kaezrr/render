@@ -11,6 +11,34 @@ pub trait GpuVertex: NoUninit {
     fn desc() -> VertexBufferLayout<'static>;
 }
 
+#[expect(unused, reason = "Only using draw model instanced for now")]
+pub trait DrawModel {
+    fn draw_mesh(&mut self, mesh: &Mesh, material: &Material, camera_bind_group: &wgpu::BindGroup);
+
+    fn draw_mesh_instanced(
+        &mut self,
+        mesh: &Mesh,
+        material: &Material,
+        instances: Range<u32>,
+        camera_bind_group: &wgpu::BindGroup,
+    );
+
+    fn draw_model(
+        &mut self,
+        model: &Model,
+        default_material: &Material,
+        camera_bind_group: &wgpu::BindGroup,
+    );
+
+    fn draw_model_instanced(
+        &mut self,
+        model: &Model,
+        default_material: &Material,
+        instances: Range<u32>,
+        camera_bind_group: &wgpu::BindGroup,
+    );
+}
+
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct ModelVertex {
@@ -58,33 +86,6 @@ pub struct Mesh {
     pub index_buffer: wgpu::Buffer,
     pub num_indices: u32,
     pub material_id: Option<usize>,
-}
-
-pub trait DrawModel {
-    fn draw_mesh(&mut self, mesh: &Mesh, material: &Material, camera_bind_group: &wgpu::BindGroup);
-
-    fn draw_mesh_instanced(
-        &mut self,
-        mesh: &Mesh,
-        material: &Material,
-        instances: Range<u32>,
-        camera_bind_group: &wgpu::BindGroup,
-    );
-
-    fn draw_model(
-        &mut self,
-        model: &Model,
-        default_material: &Material,
-        camera_bind_group: &wgpu::BindGroup,
-    );
-
-    fn draw_model_instanced(
-        &mut self,
-        model: &Model,
-        default_material: &Material,
-        instances: Range<u32>,
-        camera_bind_group: &wgpu::BindGroup,
-    );
 }
 
 impl DrawModel for RenderPass<'_> {
