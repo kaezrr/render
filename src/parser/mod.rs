@@ -281,17 +281,12 @@ fn parse_mtl_file(file_str: &str) -> anyhow::Result<Vec<ObjectMaterial>> {
                     .diffuse_map = Some(tokens[1].to_owned());
             }
 
-            #[rustfmt::skip]
             // Diffuse color
             "Kd" => {
                 parsed_materials
                     .last_mut()
                     .ok_or(anyhow::anyhow!("diffuse color without parent material"))?
-                    .diffuse_color = [
-                        tokens[1].parse()?,
-                        tokens[2].parse()?,
-                        tokens[3].parse()?
-                    ];
+                    .diffuse_color = [tokens[1].parse()?, tokens[2].parse()?, tokens[3].parse()?];
             }
 
             // Comment

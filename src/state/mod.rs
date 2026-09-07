@@ -5,8 +5,10 @@ use std::sync::Arc;
 
 use glam::Quat;
 use glam::Vec3;
+use glam::Vec4Swizzles;
 use log::warn;
 use wgpu::BindGroupLayoutDescriptor;
+use wgpu::BufferUsages;
 use wgpu::Color;
 use wgpu::Operations;
 use wgpu::PipelineLayoutDescriptor;
@@ -14,6 +16,8 @@ use wgpu::RenderPassColorAttachment;
 use wgpu::RenderPassDescriptor;
 use wgpu::RenderPipeline;
 use wgpu::ShaderModuleDescriptor;
+use wgpu::util::BufferInitDescriptor;
+use wgpu::util::DeviceExt;
 use wgpu::wgt::CommandEncoderDescriptor;
 use wgpu::wgt::TextureViewDescriptor;
 use winit::event::MouseScrollDelta;
@@ -27,6 +31,8 @@ use crate::camera::Projection;
 use crate::instance::Instance;
 use crate::instance::InstanceBundle;
 use crate::instance::InstanceRaw;
+use crate::light::DrawLight;
+use crate::light::LightUniform;
 use crate::load_asset_string;
 use crate::model::DrawModel;
 use crate::model::GpuVertex;
@@ -48,8 +54,15 @@ pub struct State<'a> {
     instance_bundle: InstanceBundle,
     default_material: Material,
 
+    light_render_pipeline: RenderPipeline,
     render_pipeline: RenderPipeline,
     camera: CameraBundle,
+
+    light_bind_group: wgpu::BindGroup,
+    light_uniform: LightUniform,
+    light_buffer: wgpu::Buffer,
+
+    cursor_grabbed: bool,
 }
 
 impl State<'_> {
@@ -92,30 +105,100 @@ impl State<'_> {
                     ],
                 });
 
+        let light_uniform = LightUniform {
+            position: (5.0, 5.0, 5.0, 1.0).into(),
+            color: (1.0, 1.0, 1.0, 1.0).into(),
+        };
+
+        let light_buffer = gpu_context
+            .device
+            .create_buffer_init(&BufferInitDescriptor {
+                label: Some("light_buffer_uniform"),
+                contents: bytemuck::cast_slice(&[light_uniform]),
+                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            });
+
+        let light_bind_group_layout =
+            gpu_context
+                .device
+                .create_bind_group_layout(&BindGroupLayoutDescriptor {
+                    label: None,
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT | wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    }],
+                });
+
+        let light_bind_group = gpu_context
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: None,
+                layout: &light_bind_group_layout,
+                entries: &[wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: light_buffer.as_entire_binding(),
+                }],
+            });
+
         let render_pipeline = {
+            let layout = gpu_context
+                .device
+                .create_pipeline_layout(&PipelineLayoutDescriptor {
+                    label: Some("Model Pipeline Layout"),
+                    immediate_size: 0,
+                    bind_group_layouts: &[
+                        Some(&texture_bind_group_layout),
+                        Some(&camera.bind_group_layout),
+                        Some(&light_bind_group_layout),
+                    ],
+                });
+
             let shader = ShaderModuleDescriptor {
-                label: Some("model.wgsl"),
+                label: Some("Model Shader"),
                 source: wgpu::ShaderSource::Wgsl(load_asset_string("shaders/model.wgsl")?.into()),
             };
 
-            let render_pipeline_layout =
-                gpu_context
-                    .device
-                    .create_pipeline_layout(&PipelineLayoutDescriptor {
-                        label: Some("render_pipeline_layout"),
-                        immediate_size: 0,
-                        bind_group_layouts: &[
-                            Some(&camera.bind_group_layout),
-                            Some(&texture_bind_group_layout),
-                        ],
-                    });
-
             pipeline::create_render_pipeline(
                 &gpu_context.device,
-                &render_pipeline_layout,
+                "Model Render Pipeline",
+                &layout,
                 gpu_context.config.format,
                 Some(Texture::DEPTH_FORMAT),
                 &[Some(ModelVertex::desc()), Some(InstanceRaw::desc())],
+                shader,
+            )
+        };
+
+        let light_render_pipeline = {
+            let layout = gpu_context
+                .device
+                .create_pipeline_layout(&PipelineLayoutDescriptor {
+                    label: Some("Light Pipeline Layout"),
+                    bind_group_layouts: &[
+                        Some(&camera.bind_group_layout),
+                        Some(&light_bind_group_layout),
+                    ],
+                    immediate_size: 0,
+                });
+
+            let shader = ShaderModuleDescriptor {
+                label: Some("Light Shader"),
+                source: wgpu::ShaderSource::Wgsl(load_asset_string("shaders/light.wgsl")?.into()),
+            };
+
+            pipeline::create_render_pipeline(
+                &gpu_context.device,
+                "Light Render Pipeline",
+                &layout,
+                gpu_context.config.format,
+                Some(Texture::DEPTH_FORMAT),
+                &[Some(ModelVertex::desc())],
                 shader,
             )
         };
@@ -172,8 +255,15 @@ impl State<'_> {
             instance_bundle,
             default_material,
 
+            light_render_pipeline,
             render_pipeline,
             camera,
+
+            light_bind_group,
+            light_uniform,
+            light_buffer,
+
+            cursor_grabbed: false,
         })
     }
 
@@ -237,6 +327,13 @@ impl State<'_> {
             multiview_mask: None,
         });
 
+        render_pass.set_pipeline(&self.light_render_pipeline);
+        render_pass.draw_light_model(
+            &self.obj_model,
+            &self.camera.bind_group,
+            &self.light_bind_group,
+        );
+
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_vertex_buffer(1, self.instance_bundle.buffer.slice(..));
 
@@ -245,6 +342,7 @@ impl State<'_> {
             &self.default_material,
             0..self.instance_bundle.instances.len() as u32,
             &self.camera.bind_group,
+            &self.light_bind_group,
         );
 
         drop(render_pass);
@@ -259,6 +357,18 @@ impl State<'_> {
     }
 
     pub fn update(&mut self, dt: Duration) {
+        let old_position = self.light_uniform.position;
+        let light_rotation_angle = f32::to_radians(50.0) * dt.as_secs_f32();
+        let light_rotation = Quat::from_rotation_y(light_rotation_angle);
+
+        self.light_uniform.position = (light_rotation * old_position.xyz()).extend(1.0);
+
+        self.gpu_context.queue.write_buffer(
+            &self.light_buffer,
+            0,
+            bytemuck::cast_slice(&[self.light_uniform]),
+        );
+
         self.camera.update(&self.gpu_context.queue, dt);
 
         let angle = f32::to_radians(10.0) * dt.as_secs_f32();
@@ -277,10 +387,16 @@ impl State<'_> {
     }
 
     pub fn process_mouse_delta(&mut self, dx: f64, dy: f64) {
+        if !self.cursor_grabbed {
+            return;
+        }
         self.camera.controller.process_mouse_delta(dx, dy);
     }
 
     pub fn process_mouse_scroll(&mut self, delta: &MouseScrollDelta) {
+        if !self.cursor_grabbed {
+            return;
+        }
         self.camera.controller.process_mouse_scroll(delta);
     }
 
@@ -294,15 +410,17 @@ impl State<'_> {
         );
     }
 
-    pub fn capture_mouse(&self) -> anyhow::Result<()> {
+    pub fn capture_mouse(&mut self) -> anyhow::Result<()> {
         self.window.set_cursor_grab(CursorGrabMode::Locked)?;
         self.window.set_cursor_visible(false);
+        self.cursor_grabbed = true;
         Ok(())
     }
 
-    pub fn release_mouse(&self) -> anyhow::Result<()> {
+    pub fn release_mouse(&mut self) -> anyhow::Result<()> {
         self.window.set_cursor_grab(CursorGrabMode::None)?;
         self.window.set_cursor_visible(true);
+        self.cursor_grabbed = false;
         Ok(())
     }
 }
