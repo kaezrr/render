@@ -7,8 +7,6 @@ use glam::Quat;
 use glam::Vec3;
 use glam::Vec4Swizzles;
 use log::warn;
-use wgpu::BindGroupLayoutDescriptor;
-use wgpu::BufferUsages;
 use wgpu::Color;
 use wgpu::Operations;
 use wgpu::PipelineLayoutDescriptor;
@@ -16,8 +14,6 @@ use wgpu::RenderPassColorAttachment;
 use wgpu::RenderPassDescriptor;
 use wgpu::RenderPipeline;
 use wgpu::ShaderModuleDescriptor;
-use wgpu::util::BufferInitDescriptor;
-use wgpu::util::DeviceExt;
 use wgpu::wgt::CommandEncoderDescriptor;
 use wgpu::wgt::TextureViewDescriptor;
 use winit::event::MouseScrollDelta;
@@ -32,6 +28,7 @@ use crate::instance::Instance;
 use crate::instance::InstanceBundle;
 use crate::instance::InstanceRaw;
 use crate::light::DrawLight;
+use crate::light::LightBundle;
 use crate::light::LightUniform;
 use crate::load_asset_string;
 use crate::model::DrawModel;
@@ -42,6 +39,7 @@ use crate::model::ModelVertex;
 use crate::parser::load_model_from_obj;
 use crate::pipeline;
 use crate::state::gpu::GpuContext;
+use crate::texture;
 use crate::texture::Texture;
 
 #[derive(Debug)]
@@ -54,13 +52,11 @@ pub struct State<'a> {
     instance_bundle: InstanceBundle,
     default_material: Material,
 
-    light_render_pipeline: RenderPipeline,
-    render_pipeline: RenderPipeline,
     camera: CameraBundle,
+    render_pipeline: RenderPipeline,
 
-    light_bind_group: wgpu::BindGroup,
-    light_uniform: LightUniform,
-    light_buffer: wgpu::Buffer,
+    light: LightBundle,
+    light_render_pipeline: RenderPipeline,
 
     cursor_grabbed: bool,
 }
@@ -69,82 +65,11 @@ impl State<'_> {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
         let gpu_context = GpuContext::new(window.clone()).await?;
 
-        let camera = {
-            let config = &gpu_context.config;
-            CameraBundle::new(
-                &gpu_context.device,
-                Camera::new((0.0, 5.0, 10.0), -90.0, -20.0),
-                Projection::new(config.width, config.height, 45.0, 0.1, 100.0),
-                4.0,
-                0.4,
-            )
-        };
+        let camera = create_camera_bundle(&gpu_context.device, &gpu_context.config);
 
-        let texture_bind_group_layout =
-            gpu_context
-                .device
-                .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                    label: Some("texture_bind_group_layout"),
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                                view_dimension: wgpu::TextureViewDimension::D2,
-                                multisampled: false,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                            count: None,
-                        },
-                    ],
-                });
+        let light = create_light_bundle(&gpu_context.device);
 
-        let light_uniform = LightUniform {
-            position: (5.0, 5.0, 5.0, 1.0).into(),
-            color: (1.0, 1.0, 1.0, 1.0).into(),
-        };
-
-        let light_buffer = gpu_context
-            .device
-            .create_buffer_init(&BufferInitDescriptor {
-                label: Some("light_buffer_uniform"),
-                contents: bytemuck::cast_slice(&[light_uniform]),
-                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            });
-
-        let light_bind_group_layout =
-            gpu_context
-                .device
-                .create_bind_group_layout(&BindGroupLayoutDescriptor {
-                    label: None,
-                    entries: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    }],
-                });
-
-        let light_bind_group = gpu_context
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: None,
-                layout: &light_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: light_buffer.as_entire_binding(),
-                }],
-            });
+        let texture_bind_group_layout = texture::create_bind_group_layout(&gpu_context.device);
 
         let render_pipeline = {
             let layout = gpu_context
@@ -155,7 +80,7 @@ impl State<'_> {
                     bind_group_layouts: &[
                         Some(&texture_bind_group_layout),
                         Some(&camera.bind_group_layout),
-                        Some(&light_bind_group_layout),
+                        Some(&light.bind_group_layout),
                     ],
                 });
 
@@ -182,7 +107,7 @@ impl State<'_> {
                     label: Some("Light Pipeline Layout"),
                     bind_group_layouts: &[
                         Some(&camera.bind_group_layout),
-                        Some(&light_bind_group_layout),
+                        Some(&light.bind_group_layout),
                     ],
                     immediate_size: 0,
                 });
@@ -203,33 +128,9 @@ impl State<'_> {
             )
         };
 
-        let instance_bundle = {
-            const SPACE_BETWEEN: f32 = 3.0;
-            const NUM_INSTANCES_PER_ROW: u32 = 10;
-            let instances = (0..NUM_INSTANCES_PER_ROW)
-                .flat_map(|z| {
-                    (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                        let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                        let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+        let instance_bundle = create_instance_bundle(&gpu_context.device);
 
-                        let position = Vec3 { x, y: 0.0, z };
-
-                        let rotation = if position == Vec3::ZERO {
-                            Quat::from_axis_angle(Vec3::Z, 0.0f32.to_radians())
-                        } else {
-                            Quat::from_axis_angle(position.normalize(), 45.0f32.to_radians())
-                        };
-
-                        Instance {
-                            position,
-                            rotation,
-                            scale: Vec3::ONE,
-                        }
-                    })
-                })
-                .collect();
-            InstanceBundle::new(&gpu_context.device, instances)
-        };
+        let default_material = create_default_material(&gpu_context, &texture_bind_group_layout);
 
         let depth_texture = Texture::create_depth_texture(
             &gpu_context.device,
@@ -244,8 +145,6 @@ impl State<'_> {
             "models/cube/cube.obj",
         )?;
 
-        let default_material = create_default_material(&gpu_context, &texture_bind_group_layout);
-
         Ok(Self {
             window,
             gpu_context,
@@ -255,13 +154,11 @@ impl State<'_> {
             instance_bundle,
             default_material,
 
-            light_render_pipeline,
-            render_pipeline,
             camera,
+            render_pipeline,
 
-            light_bind_group,
-            light_uniform,
-            light_buffer,
+            light,
+            light_render_pipeline,
 
             cursor_grabbed: false,
         })
@@ -331,7 +228,7 @@ impl State<'_> {
         render_pass.draw_light_model(
             &self.obj_model,
             &self.camera.bind_group,
-            &self.light_bind_group,
+            &self.light.bind_group,
         );
 
         render_pass.set_pipeline(&self.render_pipeline);
@@ -342,7 +239,7 @@ impl State<'_> {
             &self.default_material,
             0..self.instance_bundle.instances.len() as u32,
             &self.camera.bind_group,
-            &self.light_bind_group,
+            &self.light.bind_group,
         );
 
         drop(render_pass);
@@ -357,27 +254,14 @@ impl State<'_> {
     }
 
     pub fn update(&mut self, dt: Duration) {
-        let old_position = self.light_uniform.position;
+        let old_position = self.light.uniform.position;
         let light_rotation_angle = f32::to_radians(50.0) * dt.as_secs_f32();
         let light_rotation = Quat::from_rotation_y(light_rotation_angle);
 
-        self.light_uniform.position = (light_rotation * old_position.xyz()).extend(1.0);
+        self.light.uniform.position = (light_rotation * old_position.xyz()).to_homogeneous();
 
-        self.gpu_context.queue.write_buffer(
-            &self.light_buffer,
-            0,
-            bytemuck::cast_slice(&[self.light_uniform]),
-        );
-
+        self.light.update(&self.gpu_context.queue);
         self.camera.update(&self.gpu_context.queue, dt);
-
-        let angle = f32::to_radians(10.0) * dt.as_secs_f32();
-        let axis = Vec3::new(1.0, 1.0, 0.0).normalize();
-        let rotation = Quat::from_axis_angle(axis, angle);
-
-        for instance in &mut self.instance_bundle.instances {
-            instance.rotation *= rotation;
-        }
 
         self.instance_bundle.update(&self.gpu_context.queue);
     }
@@ -443,4 +327,57 @@ fn create_default_material(gpu_context: &GpuContext, layout: &wgpu::BindGroupLay
         name: "default render material".to_string(),
         bind_group,
     }
+}
+
+fn create_instance_bundle(device: &wgpu::Device) -> InstanceBundle {
+    const SPACE_BETWEEN: f32 = 3.0;
+    const NUM_INSTANCES_PER_ROW: u32 = 10;
+
+    let instances = (0..NUM_INSTANCES_PER_ROW)
+        .flat_map(|z| {
+            (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+
+                let position = Vec3 { x, y: 0.0, z };
+
+                let rotation = if position == Vec3::ZERO {
+                    Quat::from_axis_angle(Vec3::Z, 0.0f32.to_radians())
+                } else {
+                    Quat::from_axis_angle(position.normalize(), 45.0f32.to_radians())
+                };
+
+                Instance {
+                    position,
+                    rotation,
+                    scale: Vec3::ONE,
+                }
+            })
+        })
+        .collect();
+
+    InstanceBundle::new(device, instances)
+}
+
+fn create_camera_bundle(
+    device: &wgpu::Device,
+    config: &wgpu::SurfaceConfiguration,
+) -> CameraBundle {
+    CameraBundle::new(
+        device,
+        Camera::new((0.0, 5.0, 10.0), -90.0, -20.0),
+        Projection::new(config.width, config.height, 75.0, 0.1, 100.0),
+        4.0,
+        0.4,
+    )
+}
+
+fn create_light_bundle(device: &wgpu::Device) -> LightBundle {
+    LightBundle::new(
+        device,
+        LightUniform {
+            position: (5.0, 5.0, 5.0, 1.0).into(),
+            color: (1.0, 1.0, 1.0, 1.0).into(),
+        },
+    )
 }

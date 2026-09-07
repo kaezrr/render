@@ -3,6 +3,10 @@ use core::ops::Range;
 use bytemuck::Pod;
 use bytemuck::Zeroable;
 use glam::Vec4;
+use wgpu::BindGroupLayoutDescriptor;
+use wgpu::BufferUsages;
+use wgpu::util::BufferInitDescriptor;
+use wgpu::util::DeviceExt;
 
 use crate::model::Mesh;
 use crate::model::Model;
@@ -74,5 +78,59 @@ impl DrawLight for wgpu::RenderPass<'_> {
         self.set_bind_group(1, light_bind_group, &[]);
 
         self.draw_indexed(0..mesh.num_indices, 0, instances);
+    }
+}
+
+#[derive(Debug)]
+pub struct LightBundle {
+    pub bind_group: wgpu::BindGroup,
+    pub bind_group_layout: wgpu::BindGroupLayout,
+    pub uniform: LightUniform,
+
+    buffer: wgpu::Buffer,
+}
+
+impl LightBundle {
+    pub fn new(device: &wgpu::Device, uniform: LightUniform) -> Self {
+        let buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("light_buffer_uniform"),
+            contents: bytemuck::cast_slice(&[uniform]),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        let bind_group_layout = device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffer.as_entire_binding(),
+            }],
+        });
+
+        Self {
+            bind_group,
+            bind_group_layout,
+
+            uniform,
+            buffer,
+        }
+    }
+
+    pub fn update(&self, queue: &wgpu::Queue) {
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.uniform]));
     }
 }
