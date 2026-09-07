@@ -19,7 +19,7 @@ pub struct Instance {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct InstanceRaw {
-    model: [f32; 16],
+    model: Mat4,
 }
 
 impl From<&Instance> for InstanceRaw {
@@ -29,8 +29,7 @@ impl From<&Instance> for InstanceRaw {
                 value.scale,
                 value.rotation,
                 value.position,
-            )
-            .to_cols_array(),
+            ),
         }
     }
 }

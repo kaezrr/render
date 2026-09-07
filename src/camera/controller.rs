@@ -69,7 +69,7 @@ impl CameraController {
         }
     }
 
-    pub fn update_camera(&mut self, camera: &mut super::Camera, dt: Duration) {
+    pub fn update(&mut self, camera: &mut super::Camera, dt: Duration) {
         const SAFETY_BOUND: f32 = f32::consts::FRAC_PI_2 - 0.0001;
 
         let dt = dt.as_secs_f32();

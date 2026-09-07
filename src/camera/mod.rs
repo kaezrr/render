@@ -93,20 +93,21 @@ impl Projection {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct CameraUniform {
-    view_projection: [f32; 16],
+    view_projection: Mat4,
 }
 
 impl CameraUniform {
-    pub const fn new() -> Self {
-        Self {
-            view_projection: Mat4::IDENTITY.to_cols_array(),
-        }
+    pub fn new(camera: &Camera, projection: &Projection) -> Self {
+        let mut uniform = Self {
+            view_projection: Mat4::IDENTITY,
+        };
+
+        uniform.update(camera, projection);
+        uniform
     }
 
-    pub fn update_view_projection(&mut self, camera: &Camera, projection: &Projection) {
-        let view = camera.matrix();
-        let proj = projection.matrix();
-        self.view_projection = (proj * view).to_cols_array();
+    pub fn update(&mut self, camera: &Camera, projection: &Projection) {
+        self.view_projection = projection.matrix() * camera.matrix();
     }
 }
 
@@ -130,8 +131,7 @@ impl CameraBundle {
         speed: f32,
         sensitivity: f32,
     ) -> Self {
-        let mut uniform = CameraUniform::new();
-        uniform.update_view_projection(&camera, &projection);
+        let uniform = CameraUniform::new(&camera, &projection);
 
         let buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("camera_buffer"),
@@ -174,9 +174,8 @@ impl CameraBundle {
     }
 
     pub fn update(&mut self, queue: &Queue, dt: Duration) {
-        self.controller.update_camera(&mut self.camera, dt);
-        self.uniform
-            .update_view_projection(&self.camera, &self.projection);
+        self.controller.update(&mut self.camera, dt);
+        self.uniform.update(&self.camera, &self.projection);
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.uniform]));
     }
 }
