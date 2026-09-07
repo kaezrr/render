@@ -1,5 +1,6 @@
 struct CameraUniform {
     view_projection: mat4x4<f32>,
+    view_position: vec4<f32>,
 }
 
 @group(1) @binding(0)
@@ -79,11 +80,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let ambient_strength = 0.1;
     let ambient_color = light.color * ambient_strength;
 
-    let light_direction = normalize(light.position.xyz - in.world_position);
-    let diffuse_strength = max(dot(light_direction, in.world_normal), 0.0);
+    let light_dir = normalize(light.position.xyz - in.world_position);
+    let diffuse_strength = max(dot(light_dir, in.world_normal), 0.0);
     let diffuse_color = diffuse_strength * light.color;
 
-    let result = (ambient_color + diffuse_color) * object_color;
+    let view_dir = normalize(camera.view_position.xyz - in.world_position);
+    let half_dir = normalize(view_dir + light_dir);
+
+    let specular_strength = pow(max(dot(in.world_normal, half_dir), 0.0), 32.0);
+    let specular_color = specular_strength * light.color;
+
+    let result = (ambient_color + diffuse_color + specular_color) * object_color;
 
     return result;
 }

@@ -7,6 +7,7 @@ use bytemuck::Pod;
 use bytemuck::Zeroable;
 use glam::Mat4;
 use glam::Vec3;
+use glam::Vec4;
 use wgpu::BindGroup;
 use wgpu::BindGroupDescriptor;
 use wgpu::BindGroupEntry;
@@ -94,12 +95,14 @@ impl Projection {
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct CameraUniform {
     view_projection: Mat4,
+    view_position: Vec4,
 }
 
 impl CameraUniform {
     pub fn new(camera: &Camera, projection: &Projection) -> Self {
         let mut uniform = Self {
             view_projection: Mat4::IDENTITY,
+            view_position: Vec4::ZERO,
         };
 
         uniform.update(camera, projection);
@@ -108,6 +111,7 @@ impl CameraUniform {
 
     pub fn update(&mut self, camera: &Camera, projection: &Projection) {
         self.view_projection = projection.matrix() * camera.matrix();
+        self.view_position = camera.position.to_homogeneous();
     }
 }
 
@@ -143,7 +147,7 @@ impl CameraBundle {
             label: Some("camera_binding_group_layout"),
             entries: &[BindGroupLayoutEntry {
                 binding: 0,
-                visibility: ShaderStages::VERTEX,
+                visibility: ShaderStages::VERTEX_FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
