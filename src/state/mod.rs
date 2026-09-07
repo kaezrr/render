@@ -1,5 +1,6 @@
 mod gpu;
 
+use core::time::Duration;
 use std::sync::Arc;
 
 use glam::Quat;
@@ -15,12 +16,13 @@ use wgpu::RenderPipeline;
 use wgpu::ShaderModuleDescriptor;
 use wgpu::wgt::CommandEncoderDescriptor;
 use wgpu::wgt::TextureViewDescriptor;
-use winit::event_loop::ActiveEventLoop;
+use winit::event::MouseScrollDelta;
 use winit::keyboard::KeyCode;
 use winit::window::Window;
 
 use crate::camera::Camera;
 use crate::camera::CameraBundle;
+use crate::camera::Projection;
 use crate::instance::Instance;
 use crate::instance::InstanceBundle;
 use crate::instance::InstanceRaw;
@@ -53,19 +55,16 @@ impl State<'_> {
     pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
         let gpu_context = GpuContext::new(window.clone()).await?;
 
-        let camera = CameraBundle::new(
-            &gpu_context.device,
-            Camera {
-                eye: (0.0, 3.0, 6.0).into(),
-                target: (0.0, 0.0, 0.0).into(),
-                up: glam::Vec3::Y,
-                aspect_ratio: gpu_context.config.width as f32 / gpu_context.config.height as f32,
-                vertical_fov: f32::to_radians(45.0),
-                znear: 0.1,
-                zfar: 100.0,
-            },
-            5.0,
-        );
+        let camera = {
+            let config = &gpu_context.config;
+            CameraBundle::new(
+                &gpu_context.device,
+                Camera::new((0.0, 5.0, 10.0), -90.0, -20.0),
+                Projection::new(config.width, config.height, 45.0, 0.1, 100.0),
+                4.0,
+                0.4,
+            )
+        };
 
         let texture_bind_group_layout =
             gpu_context
@@ -120,7 +119,33 @@ impl State<'_> {
             )
         };
 
-        let instance_bundle = InstanceBundle::new(&gpu_context.device, vec![Instance::SINGLE]);
+        let instance_bundle = {
+            const SPACE_BETWEEN: f32 = 3.0;
+            const NUM_INSTANCES_PER_ROW: u32 = 10;
+            let instances = (0..NUM_INSTANCES_PER_ROW)
+                .flat_map(|z| {
+                    (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                        let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                        let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+
+                        let position = Vec3 { x, y: 0.0, z };
+
+                        let rotation = if position == Vec3::ZERO {
+                            Quat::from_axis_angle(Vec3::Z, 0.0f32.to_radians())
+                        } else {
+                            Quat::from_axis_angle(position.normalize(), 45.0f32.to_radians())
+                        };
+
+                        Instance {
+                            position,
+                            rotation,
+                            scale: Vec3::ONE,
+                        }
+                    })
+                })
+                .collect();
+            InstanceBundle::new(&gpu_context.device, instances)
+        };
 
         let depth_texture = Texture::create_depth_texture(
             &gpu_context.device,
@@ -132,7 +157,7 @@ impl State<'_> {
             &gpu_context.device,
             &gpu_context.queue,
             &texture_bind_group_layout,
-            "models/donut/donut.obj",
+            "models/cube/cube.obj",
         )?;
 
         let default_material = create_default_material(&gpu_context, &texture_bind_group_layout);
@@ -232,10 +257,10 @@ impl State<'_> {
         Ok(())
     }
 
-    pub fn update(&mut self, dt: f32) {
+    pub fn update(&mut self, dt: Duration) {
         self.camera.update(&self.gpu_context.queue, dt);
 
-        let angle = f32::to_radians(0.0) * dt;
+        let angle = f32::to_radians(10.0) * dt.as_secs_f32();
         let axis = Vec3::new(1.0, 1.0, 0.0).normalize();
         let rotation = Quat::from_axis_angle(axis, angle);
 
@@ -246,15 +271,20 @@ impl State<'_> {
         self.instance_bundle.update(&self.gpu_context.queue);
     }
 
-    pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, key: KeyCode, is_pressed: bool) {
-        if key == KeyCode::Escape && is_pressed {
-            event_loop.exit();
-        } else {
-            self.camera.handle_key(key, is_pressed);
-        }
+    pub fn process_keyboard(&mut self, key: KeyCode, is_pressed: bool) {
+        self.camera.controller.process_keyboard(key, is_pressed);
+    }
+
+    pub fn process_mouse_delta(&mut self, dx: f64, dy: f64) {
+        self.camera.controller.process_mouse_delta(dx, dy);
+    }
+
+    pub fn process_mouse_scroll(&mut self, delta: &MouseScrollDelta) {
+        self.camera.controller.process_mouse_scroll(delta);
     }
 
     pub fn resize_surface(&mut self, width: u32, height: u32) {
+        self.camera.projection.resize(width, height);
         self.gpu_context.resize_surface(width, height);
         self.depth_texture = Texture::create_depth_texture(
             &self.gpu_context.device,

@@ -15,9 +15,14 @@ use log::info;
 use log::warn;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
+use winit::event::DeviceEvent;
+use winit::event::DeviceId;
+use winit::event::ElementState;
 use winit::event::KeyEvent;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
+use winit::keyboard::KeyCode;
+use winit::keyboard::PhysicalKey;
 use winit::window::Window;
 use winit::window::WindowId;
 
@@ -61,13 +66,9 @@ impl ApplicationHandler for App {
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
         let Some(state) = self.state.as_mut() else {
-            warn!("Window not initialized yet!");
+            warn!("Ignoring window event because app is not ready yet!");
             return;
         };
-
-        let now = Instant::now();
-        let dt = (now - self.last_frame_time).as_secs_f32();
-        self.last_frame_time = now;
 
         match event {
             WindowEvent::CloseRequested => {
@@ -76,6 +77,9 @@ impl ApplicationHandler for App {
             }
 
             WindowEvent::RedrawRequested => {
+                let now = Instant::now();
+                let dt = now - self.last_frame_time;
+                self.last_frame_time = now;
                 state.update(dt);
 
                 if let Err(e) = state.render() {
@@ -91,16 +95,35 @@ impl ApplicationHandler for App {
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
-                        physical_key: winit::keyboard::PhysicalKey::Code(key),
+                        physical_key: PhysicalKey::Code(key),
                         state: key_state,
                         ..
                     },
                 ..
             } => {
-                state.handle_key(event_loop, key, key_state.is_pressed());
+                if key == KeyCode::Escape && key_state == ElementState::Pressed {
+                    event_loop.exit();
+                } else {
+                    state.process_keyboard(key, key_state.is_pressed());
+                }
             }
 
-            _ => (),
+            WindowEvent::MouseWheel { delta, .. } => {
+                state.process_mouse_scroll(&delta);
+            }
+
+            _ => {}
+        }
+    }
+
+    fn device_event(&mut self, _: &ActiveEventLoop, _: DeviceId, event: DeviceEvent) {
+        let Some(state) = self.state.as_mut() else {
+            warn!("Ignoring device event because app is not ready yet!");
+            return;
+        };
+
+        if let DeviceEvent::MouseMotion { delta } = event {
+            state.process_mouse_delta(delta.0, delta.1);
         }
     }
 }

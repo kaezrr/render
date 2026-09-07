@@ -1,7 +1,10 @@
+use core::f32;
+use core::time::Duration;
+
 use bytemuck::Pod;
 use bytemuck::Zeroable;
 use glam::Mat4;
-use glam::camera;
+use glam::Vec3;
 use wgpu::BindGroup;
 use wgpu::BindGroupDescriptor;
 use wgpu::BindGroupEntry;
@@ -15,46 +18,173 @@ use wgpu::Queue;
 use wgpu::ShaderStages;
 use wgpu::util::BufferInitDescriptor;
 use wgpu::util::DeviceExt;
+use winit::event::MouseScrollDelta;
 use winit::keyboard::KeyCode;
 
-bitflags::bitflags! {
-    #[derive(Debug)]
-    struct Movement: u8 {
-        const FORWARD   = 1 << 0;
-        const BACKWARD  = 1 << 1;
-        const LEFT      = 1 << 2;
-        const RIGHT     = 1 << 3;
+#[derive(Debug)]
+pub struct Camera {
+    position: Vec3,
+    yaw: f32,
+    pitch: f32,
+}
+
+impl Camera {
+    /// Create a new camera with a given position, yaw and pitch.
+    /// yaw and pitch are in degrees
+    pub fn new(position: impl Into<Vec3>, yaw: f32, pitch: f32) -> Self {
+        Self {
+            position: position.into(),
+            yaw: yaw.to_radians(),
+            pitch: pitch.to_radians(),
+        }
+    }
+
+    pub fn matrix(&self) -> Mat4 {
+        let (sin_yaw, cos_yaw) = self.yaw.sin_cos();
+        let (sin_pitch, cos_pitch) = self.pitch.sin_cos();
+
+        glam::camera::rh::view::look_to_mat4(
+            self.position,
+            Vec3 {
+                x: cos_pitch * cos_yaw,
+                y: sin_pitch,
+                z: cos_pitch * sin_yaw,
+            }
+            .normalize(),
+            Vec3::Y,
+        )
     }
 }
 
 #[derive(Debug)]
-pub struct Camera {
-    pub eye: glam::Vec3,
-    pub target: glam::Vec3,
-    pub up: glam::Vec3,
-    pub aspect_ratio: f32,
-    pub vertical_fov: f32,
-    pub znear: f32,
-    pub zfar: f32,
+pub struct Projection {
+    aspect_ratio: f32,
+    vertical_fov: f32,
+    znear: f32,
+    zfar: f32,
 }
 
-impl Camera {
-    pub fn build_view_projection_matrix(&self) -> Mat4 {
-        let view = camera::rh::view::look_at_mat4(self.eye, self.target, self.up);
-        let projection = camera::rh::proj::directx::perspective(
+impl Projection {
+    pub fn new(width: u32, height: u32, fovy: f32, znear: f32, zfar: f32) -> Self {
+        Self {
+            aspect_ratio: width as f32 / height as f32,
+            vertical_fov: fovy.to_radians(),
+            znear,
+            zfar,
+        }
+    }
+
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.aspect_ratio = width as f32 / height as f32;
+    }
+
+    pub fn matrix(&self) -> Mat4 {
+        glam::camera::rh::proj::directx::perspective(
             self.vertical_fov,
             self.aspect_ratio,
             self.znear,
             self.zfar,
-        );
+        )
+    }
+}
 
-        projection * view
+#[derive(Debug)]
+pub struct CameraController {
+    amount_left: f32,
+    amount_right: f32,
+    amount_forward: f32,
+    amount_backward: f32,
+
+    amount_up: f32,
+    amount_down: f32,
+
+    rotate_horizontal: f32,
+    rotate_vertical: f32,
+
+    scroll: f32,
+    speed: f32,
+    sensitivity: f32,
+}
+
+impl CameraController {
+    pub fn new(speed: f32, sensitivity: f32) -> Self {
+        Self {
+            amount_left: 0.0,
+            amount_right: 0.0,
+            amount_forward: 0.0,
+            amount_backward: 0.0,
+
+            amount_up: 0.0,
+            amount_down: 0.0,
+
+            rotate_horizontal: 0.0,
+            rotate_vertical: 0.0,
+
+            scroll: 0.0,
+            speed,
+            sensitivity,
+        }
     }
 
-    pub fn create_uniform(&self) -> CameraUniform {
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_projection(self);
-        camera_uniform
+    pub fn process_keyboard(&mut self, key: KeyCode, is_pressed: bool) {
+        let amount = if is_pressed { 1.0 } else { 0.0 };
+
+        match key {
+            KeyCode::KeyW => self.amount_forward = amount,
+            KeyCode::KeyA => self.amount_left = amount,
+            KeyCode::KeyS => self.amount_backward = amount,
+            KeyCode::KeyD => self.amount_right = amount,
+            KeyCode::ControlLeft => self.amount_up = amount,
+            KeyCode::ShiftLeft => self.amount_down = amount,
+            x => log::debug!("Ignoring keypress: {x:?}"),
+        }
+    }
+
+    pub fn process_mouse_delta(&mut self, dx: f64, dy: f64) {
+        self.rotate_horizontal = dx as f32;
+        self.rotate_vertical = dy as f32;
+    }
+
+    pub fn process_mouse_scroll(&mut self, delta: &MouseScrollDelta) {
+        self.scroll = match delta {
+            MouseScrollDelta::LineDelta(_, scroll) => scroll * 100.0,
+            MouseScrollDelta::PixelDelta(physical_position) => physical_position.y as f32,
+        }
+    }
+
+    pub fn update_camera(&mut self, camera: &mut Camera, dt: Duration) {
+        const SAFETY_BOUND: f32 = f32::consts::FRAC_PI_2 - 0.0001;
+
+        let dt = dt.as_secs_f32();
+
+        let (yaw_sin, yaw_cos) = camera.yaw.sin_cos();
+        let forward = Vec3::new(yaw_cos, 0.0, yaw_sin).normalize();
+        let right = Vec3::new(-yaw_sin, 0.0, yaw_cos).normalize();
+
+        // Move forward, backward, left or right
+        camera.position += forward * (self.amount_forward - self.amount_backward) * self.speed * dt;
+        camera.position += right * (self.amount_right - self.amount_left) * self.speed * dt;
+
+        let (pitch_sin, pitch_cos) = camera.pitch.sin_cos();
+        let scrollward = Vec3::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
+
+        // Pseudozooming via mouse scroll
+        camera.position += scrollward * self.scroll * self.speed * self.sensitivity * dt;
+        // Reset this to zero so the camera only zooms on active mouse scroll
+        self.scroll = 0.0;
+
+        // Move up or down
+        camera.position.y += (self.amount_up - self.amount_down) * self.speed * dt;
+
+        // Rotate
+        camera.yaw += self.rotate_horizontal.to_radians() * self.sensitivity;
+        camera.pitch += -self.rotate_vertical.to_radians() * self.sensitivity;
+        // Reset these to zero so the camera only rotates on active mouse movement
+        self.rotate_horizontal = 0.0;
+        self.rotate_vertical = 0.0;
+
+        // Bound the camera vertical rotation
+        camera.pitch = camera.pitch.clamp(-SAFETY_BOUND, SAFETY_BOUND);
     }
 }
 
@@ -71,73 +201,35 @@ impl CameraUniform {
         }
     }
 
-    pub fn update_view_projection(&mut self, camera: &Camera) {
-        self.view_projection = camera.build_view_projection_matrix().to_cols_array();
-    }
-}
-
-#[derive(Debug)]
-pub struct CameraController {
-    speed: f32,
-    movement: Movement,
-}
-
-impl CameraController {
-    const fn new(speed: f32) -> Self {
-        Self {
-            speed,
-            movement: Movement::empty(),
-        }
-    }
-
-    fn handle_key(&mut self, code: KeyCode, is_pressed: bool) {
-        match code {
-            KeyCode::KeyW | KeyCode::ArrowUp => self.movement.set(Movement::FORWARD, is_pressed),
-            KeyCode::KeyS | KeyCode::ArrowDown => self.movement.set(Movement::BACKWARD, is_pressed),
-            KeyCode::KeyA | KeyCode::ArrowLeft => self.movement.set(Movement::LEFT, is_pressed),
-            KeyCode::KeyD | KeyCode::ArrowRight => self.movement.set(Movement::RIGHT, is_pressed),
-            _ => (),
-        }
-    }
-
-    fn update_camera(&self, camera: &mut Camera, dt: f32) {
-        let (forward, f_mag) = (camera.target - camera.eye).normalize_and_length();
-
-        if self.movement.contains(Movement::FORWARD) && f_mag > self.speed * dt {
-            camera.eye += forward * self.speed * dt;
-        }
-
-        if self.movement.contains(Movement::BACKWARD) {
-            camera.eye -= forward * self.speed * dt;
-        }
-
-        let right = forward.cross(camera.up);
-        let forward = camera.target - camera.eye;
-        let f_mag = forward.length();
-
-        if self.movement.contains(Movement::RIGHT) {
-            camera.eye = camera.target - (forward + right * self.speed * dt).normalize() * f_mag;
-        }
-        if self.movement.contains(Movement::LEFT) {
-            camera.eye = camera.target - (forward - right * self.speed * dt).normalize() * f_mag;
-        }
+    pub fn update_view_projection(&mut self, camera: &Camera, projection: &Projection) {
+        let view = camera.matrix();
+        let proj = projection.matrix();
+        self.view_projection = (proj * view).to_cols_array();
     }
 }
 
 #[derive(Debug)]
 pub struct CameraBundle {
-    pub camera: Camera,
-    pub controller: CameraController,
     pub bind_group: BindGroup,
     pub bind_group_layout: BindGroupLayout,
+    pub controller: CameraController,
+    pub projection: Projection,
 
+    camera: Camera,
     buffer: Buffer,
     uniform: CameraUniform,
 }
 
 impl CameraBundle {
-    pub fn new(device: &Device, camera: Camera, speed: f32) -> Self {
-        let uniform = camera.create_uniform();
+    pub fn new(
+        device: &Device,
+        camera: Camera,
+        projection: Projection,
+        speed: f32,
+        sensitivity: f32,
+    ) -> Self {
+        let mut uniform = CameraUniform::new();
+        uniform.update_view_projection(&camera, &projection);
 
         let buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("camera_buffer"),
@@ -170,21 +262,19 @@ impl CameraBundle {
 
         Self {
             camera,
-            controller: CameraController::new(speed),
+            controller: CameraController::new(speed, sensitivity),
             bind_group,
             bind_group_layout,
+            projection,
             buffer,
             uniform,
         }
     }
 
-    pub fn update(&mut self, queue: &Queue, dt: f32) {
+    pub fn update(&mut self, queue: &Queue, dt: Duration) {
         self.controller.update_camera(&mut self.camera, dt);
-        self.uniform.update_view_projection(&self.camera);
+        self.uniform
+            .update_view_projection(&self.camera, &self.projection);
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.uniform]));
-    }
-
-    pub fn handle_key(&mut self, code: KeyCode, is_pressed: bool) {
-        self.controller.handle_key(code, is_pressed);
     }
 }

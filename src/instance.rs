@@ -16,14 +16,6 @@ pub struct Instance {
     pub scale: Vec3,
 }
 
-impl Instance {
-    pub const SINGLE: Self = Self {
-        position: Vec3::ZERO,
-        rotation: Quat::IDENTITY,
-        scale: Vec3::ONE,
-    };
-}
-
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct InstanceRaw {
