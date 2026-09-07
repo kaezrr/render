@@ -61,16 +61,43 @@ where
 
     for material in object_materials {
         let diffuse_texture = if let Some(diffuse_texture_map) = material.diffuse_map {
-            let texture_bytes = read_texture(&diffuse_texture_map)?;
-            Texture::from_bytes(device, queue, &texture_bytes, &material.name)?
+            Texture::from_bytes(
+                device,
+                queue,
+                &read_texture(&diffuse_texture_map)?,
+                wgpu::TextureFormat::Rgba8UnormSrgb,
+                &material.name,
+            )?
         } else {
-            Texture::from_solid_color(device, queue, material.diffuse_color, Some(&material.name))
+            Texture::from_solid_color(
+                device,
+                queue,
+                material.diffuse_color,
+                Some(&format!("Diffuse Texture: {}", material.name)),
+            )
         };
 
-        let bind_group = diffuse_texture.create_bind_group(
+        let normal_texture = if let Some(normal_map) = material.normal_map {
+            Texture::from_bytes(
+                device,
+                queue,
+                &read_texture(&normal_map)?,
+                wgpu::TextureFormat::Rgba8Unorm,
+                &material.name,
+            )?
+        } else {
+            Texture::create_solid_normal(
+                device,
+                queue,
+                Some(&format!("Normal Texture: {}", material.name)),
+            )
+        };
+
+        let bind_group = crate::texture::create_bind_group(
             device,
+            &format!("Bind Group: {}", material.name),
             layout,
-            Some(&format!("Bind Group: {}", material.name)),
+            &[diffuse_texture, normal_texture],
         );
 
         materials.push(Material {

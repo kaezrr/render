@@ -69,7 +69,20 @@ impl State<'_> {
 
         let light = create_light_bundle(&gpu_context.device);
 
-        let texture_bind_group_layout = texture::create_bind_group_layout(&gpu_context.device);
+        let material_layout = texture::create_bind_group_layout(
+            &gpu_context.device,
+            "Bind Group Layout: default_material",
+            2, // 2 textures, one diffuse texture and a one normal map
+        );
+
+        let default_material = create_default_material(&gpu_context, &material_layout);
+
+        let obj_model = load_model_from_obj(
+            &gpu_context.device,
+            &gpu_context.queue,
+            &material_layout,
+            "models/cube/cube.obj",
+        )?;
 
         let render_pipeline = {
             let layout = gpu_context
@@ -78,7 +91,7 @@ impl State<'_> {
                     label: Some("Model Pipeline Layout"),
                     immediate_size: 0,
                     bind_group_layouts: &[
-                        Some(&texture_bind_group_layout),
+                        Some(&material_layout),
                         Some(&camera.bind_group_layout),
                         Some(&light.bind_group_layout),
                     ],
@@ -130,20 +143,11 @@ impl State<'_> {
 
         let instance_bundle = create_instance_bundle(&gpu_context.device);
 
-        let default_material = create_default_material(&gpu_context, &texture_bind_group_layout);
-
         let depth_texture = Texture::create_depth_texture(
             &gpu_context.device,
             &gpu_context.config,
             "depth_texture",
         );
-
-        let obj_model = load_model_from_obj(
-            &gpu_context.device,
-            &gpu_context.queue,
-            &texture_bind_group_layout,
-            "models/cube/cube.obj",
-        )?;
 
         Ok(Self {
             window,
@@ -314,13 +318,20 @@ fn create_default_material(gpu_context: &GpuContext, layout: &wgpu::BindGroupLay
         &gpu_context.device,
         &gpu_context.queue,
         [1.0, 0.0, 1.0],
-        Some("default render texture"),
+        Some("Default Render Texture"),
     );
 
-    let bind_group = diffuse_texture.create_bind_group(
+    let normal_texture = Texture::create_solid_normal(
         &gpu_context.device,
+        &gpu_context.queue,
+        Some("Default Normal Texture"),
+    );
+
+    let bind_group = texture::create_bind_group(
+        &gpu_context.device,
+        "Bind Group: default_material",
         layout,
-        Some("Bind Group: default_material"),
+        &[diffuse_texture, normal_texture],
     );
 
     Material {
