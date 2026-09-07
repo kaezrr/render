@@ -18,6 +18,7 @@ use wgpu::wgt::CommandEncoderDescriptor;
 use wgpu::wgt::TextureViewDescriptor;
 use winit::event::MouseScrollDelta;
 use winit::keyboard::KeyCode;
+use winit::window::CursorGrabMode;
 use winit::window::Window;
 
 use crate::camera::Camera;
@@ -291,6 +292,18 @@ impl State<'_> {
             &self.gpu_context.config,
             "depth_texture",
         );
+    }
+
+    pub fn capture_mouse(&self) -> anyhow::Result<()> {
+        self.window.set_cursor_grab(CursorGrabMode::Locked)?;
+        self.window.set_cursor_visible(false);
+        Ok(())
+    }
+
+    pub fn release_mouse(&self) -> anyhow::Result<()> {
+        self.window.set_cursor_grab(CursorGrabMode::None)?;
+        self.window.set_cursor_visible(true);
+        Ok(())
     }
 }
 

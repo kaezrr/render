@@ -19,6 +19,7 @@ use winit::event::DeviceEvent;
 use winit::event::DeviceId;
 use winit::event::ElementState;
 use winit::event::KeyEvent;
+use winit::event::MouseButton;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::KeyCode;
@@ -110,6 +111,30 @@ impl ApplicationHandler for App {
 
             WindowEvent::MouseWheel { delta, .. } => {
                 state.process_mouse_scroll(&delta);
+            }
+
+            WindowEvent::MouseInput {
+                state: button_state,
+                button,
+                ..
+            } if button_state.is_pressed() => match button {
+                MouseButton::Left => {
+                    if let Err(err) = state.capture_mouse() {
+                        error!("Could not grab cursor: {err}");
+                    }
+                }
+                MouseButton::Right => {
+                    if let Err(err) = state.release_mouse() {
+                        error!("Could not release cursor: {err}");
+                    }
+                }
+                _ => {}
+            },
+
+            WindowEvent::Focused(false) => {
+                if let Err(err) = state.release_mouse() {
+                    error!("Could not release cursor: {err}");
+                }
             }
 
             _ => {}
