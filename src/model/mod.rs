@@ -1,15 +1,8 @@
+mod vertex;
 use core::ops::Range;
 
-use bytemuck::NoUninit;
-use bytemuck::Pod;
-use bytemuck::Zeroable;
-use wgpu::RenderPass;
-use wgpu::VertexAttribute;
-use wgpu::VertexBufferLayout;
-
-pub trait GpuVertex: NoUninit {
-    fn desc() -> VertexBufferLayout<'static>;
-}
+pub use vertex::GpuVertex;
+pub use vertex::ModelVertex;
 
 #[expect(unused, reason = "Only using draw model instanced for now")]
 pub trait DrawModel {
@@ -39,32 +32,6 @@ pub trait DrawModel {
     );
 }
 
-#[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
-pub struct ModelVertex {
-    pub position: [f32; 3],
-    pub texture_uv: [f32; 2],
-    pub normal: [f32; 3],
-}
-
-impl ModelVertex {
-    const ATTRIBS: &[VertexAttribute] = &wgpu::vertex_attr_array![
-        0 => Float32x3,
-        1 => Float32x2,
-        2 => Float32x3,
-    ];
-}
-
-impl GpuVertex for ModelVertex {
-    fn desc() -> VertexBufferLayout<'static> {
-        VertexBufferLayout {
-            array_stride: core::mem::size_of::<Self>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: Self::ATTRIBS,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Model {
     pub meshes: Vec<Mesh>,
@@ -88,7 +55,7 @@ pub struct Mesh {
     pub material_id: Option<usize>,
 }
 
-impl DrawModel for RenderPass<'_> {
+impl DrawModel for wgpu::RenderPass<'_> {
     fn draw_mesh(&mut self, mesh: &Mesh, material: &Material, camera_bind_group: &wgpu::BindGroup) {
         self.draw_mesh_instanced(mesh, material, 0..1, camera_bind_group);
     }
