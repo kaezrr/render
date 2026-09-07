@@ -1,5 +1,6 @@
 use bytemuck::Pod;
 use bytemuck::Zeroable;
+use glam::Mat3;
 use glam::Mat4;
 use glam::Quat;
 use glam::Vec3;
@@ -19,7 +20,8 @@ pub struct Instance {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct InstanceRaw {
-    model: Mat4,
+    model: [f32; 16],
+    normal: [f32; 9],
 }
 
 impl From<&Instance> for InstanceRaw {
@@ -29,24 +31,29 @@ impl From<&Instance> for InstanceRaw {
                 value.scale,
                 value.rotation,
                 value.position,
-            ),
+            )
+            .to_cols_array(),
+            normal: Mat3::from_quat(value.rotation).to_cols_array(),
         }
     }
 }
 
 impl InstanceRaw {
-    const ATTRIBS: [VertexAttribute; 4] = wgpu::vertex_attr_array![
+    const ATTRIBS: &[VertexAttribute] = &wgpu::vertex_attr_array![
         5 => Float32x4,
         6 => Float32x4,
         7 => Float32x4,
         8 => Float32x4,
+        9 => Float32x3,
+        10 => Float32x3,
+        11 => Float32x3,
     ];
 
     pub const fn desc() -> VertexBufferLayout<'static> {
         VertexBufferLayout {
             array_stride: core::mem::size_of::<Self>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &Self::ATTRIBS,
+            attributes: Self::ATTRIBS,
         }
     }
 }

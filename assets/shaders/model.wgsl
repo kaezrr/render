@@ -14,6 +14,8 @@ struct VertexInput {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) texture_coordinates: vec2<f32>,
+    @location(1) world_normal: vec3<f32>,
+    @location(2) world_position: vec3<f32>,
 }
 
 struct InstanceInput {
@@ -21,6 +23,9 @@ struct InstanceInput {
     @location(6) model_matrix_1: vec4<f32>,
     @location(7) model_matrix_2: vec4<f32>,
     @location(8) model_matrix_3: vec4<f32>,
+    @location(9) normal_matrix_0: vec3<f32>,
+    @location(10) normal_matrix_1: vec3<f32>,
+    @location(11) normal_matrix_2: vec3<f32>,
 }
 
 @vertex
@@ -35,10 +40,20 @@ fn vs_main(
         instance.model_matrix_3,
     );
 
+    let normal_matrix = mat3x3(
+        instance.normal_matrix_0,
+        instance.normal_matrix_1,
+        instance.normal_matrix_2,
+    );
+
     var out: VertexOutput;
 
     out.texture_coordinates = model.texture_coordinates;
-    out.clip_position = camera.view_projection * model_matrix * vec4(model.position, 1.0);
+    out.world_normal = normal_matrix * model.normal;
+
+    var world_position = model_matrix * vec4(model.position, 1.0);
+    out.world_position = world_position.xyz;
+    out.clip_position = camera.view_projection * world_position;
 
     return out;
 }
@@ -49,7 +64,26 @@ var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1)
 var s_diffuse: sampler;
 
+struct Light {
+    position: vec4<f32>,
+    color: vec4<f32>,
+}
+
+@group(2) @binding(0)
+var<uniform> light: Light;
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(t_diffuse, s_diffuse, in.texture_coordinates);
+    let object_color = textureSample(t_diffuse, s_diffuse, in.texture_coordinates);
+
+    let ambient_strength = 0.1;
+    let ambient_color = light.color * ambient_strength;
+
+    let light_direction = normalize(light.position.xyz - in.world_position);
+    let diffuse_strength = max(dot(light_direction, in.world_normal), 0.0);
+    let diffuse_color = diffuse_strength * light.color;
+
+    let result = (ambient_color + diffuse_color) * object_color;
+
+    return result;
 }
