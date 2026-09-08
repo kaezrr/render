@@ -329,9 +329,9 @@ fn create_default_material(gpu_context: &GpuContext, layout: &wgpu::BindGroupLay
 
     let bind_group = texture::create_bind_group(
         &gpu_context.device,
-        "Bind Group: default_material",
         layout,
         &[diffuse_texture, normal_texture],
+        Some("Bind Group: default_material"),
     );
 
     Material {
@@ -377,7 +377,7 @@ fn create_camera_bundle(
     CameraBundle::new(
         device,
         Camera::new((0.0, 5.0, 10.0), -90.0, -20.0),
-        Projection::new(config.width, config.height, 75.0, 0.1, 100.0),
+        Projection::new(config.width, config.height, 45.0, 0.1, 100.0),
         4.0,
         0.4,
     )

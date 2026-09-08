@@ -1,6 +1,8 @@
 use bytemuck::NoUninit;
 use bytemuck::Pod;
 use bytemuck::Zeroable;
+use glam::Vec2;
+use glam::Vec3;
 use wgpu::VertexAttribute;
 use wgpu::VertexBufferLayout;
 
@@ -11,9 +13,11 @@ pub trait GpuVertex: NoUninit {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct ModelVertex {
-    pub position: [f32; 3],
-    pub texture_uv: [f32; 2],
-    pub normal: [f32; 3],
+    pub position: Vec3,
+    pub texture_uv: Vec2,
+    pub normal: Vec3,
+    pub tangent: Vec3,
+    pub bitanget: Vec3,
 }
 
 impl ModelVertex {
@@ -21,6 +25,8 @@ impl ModelVertex {
         0 => Float32x3,
         1 => Float32x2,
         2 => Float32x3,
+        3 => Float32x3,
+        4 => Float32x3,
     ];
 }
 

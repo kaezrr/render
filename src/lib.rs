@@ -1,3 +1,5 @@
+#![feature(file_buffered)]
+
 mod camera;
 mod instance;
 mod light;
@@ -8,6 +10,7 @@ mod state;
 mod texture;
 
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -155,17 +158,17 @@ impl ApplicationHandler for App {
 }
 
 pub(crate) fn load_asset_bytes(file_name: impl AsRef<Path>) -> std::io::Result<Vec<u8>> {
-    let asset_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("assets")
-        .join(file_name);
-
+    let asset_path = create_asset_path(file_name);
     std::fs::read(asset_path)
 }
 
 pub(crate) fn load_asset_string(file_name: impl AsRef<Path>) -> std::io::Result<String> {
-    let asset_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("assets")
-        .join(file_name);
-
+    let asset_path = create_asset_path(file_name);
     std::fs::read_to_string(asset_path)
+}
+
+pub(crate) fn create_asset_path(file_name: impl AsRef<Path>) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("assets")
+        .join(file_name)
 }

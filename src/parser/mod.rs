@@ -1,18 +1,23 @@
 use std::collections::HashMap;
+use std::fs::File;
 use std::path::Path;
 
 use anyhow::Result;
+use glam::Vec2;
+use glam::Vec3;
 use log::warn;
 use wgpu::BindGroupLayout;
 use wgpu::util::BufferInitDescriptor;
 use wgpu::util::DeviceExt;
 
+use crate::create_asset_path;
 use crate::load_asset_bytes;
 use crate::load_asset_string;
 use crate::model::Material;
 use crate::model::Mesh;
 use crate::model::Model;
 use crate::model::ModelVertex;
+use crate::texture;
 use crate::texture::Texture;
 
 pub fn load_model_from_obj(
@@ -21,410 +26,197 @@ pub fn load_model_from_obj(
     layout: &BindGroupLayout,
     file_path: impl AsRef<Path>,
 ) -> anyhow::Result<Model> {
-    let file_str = load_asset_string(&file_path)?;
-    let parent_path = file_path
-        .as_ref()
-        .parent()
-        .unwrap_or_else(|| Path::new("."));
+    let obj_path = create_asset_path(&file_path);
+    let obj_parent = obj_path.parent().unwrap_or_else(|| Path::new("."));
+    let obj_buf = &mut File::open_buffered(&obj_path)?;
 
-    let parsed_obj = parse_obj_file(&file_str, |mtl_file| {
-        let mtl_path = parent_path.join(mtl_file);
-        load_asset_string(mtl_path)
+    let (objects, object_materials) = {
+        let r = tobj::load_obj_buf(obj_buf, &tobj::GPU_LOAD_OPTIONS, |mtl_file| {
+            let mtl_buf = &mut File::open_buffered(obj_parent.join(mtl_file))
+                .map_err(|_| tobj::LoadError::OpenFileFailed)?;
+
+            tobj::load_mtl_buf(mtl_buf)
+        })?;
+
+        (r.0, r.1?)
+    };
+
+    let materials = create_model_materials(device, queue, object_materials, layout, |texture| {
+        let texture_path = obj_parent.join(texture);
+        crate::load_asset_bytes(texture_path)
     })?;
 
-    let meshes = construct_meshes(device, &parsed_obj)?;
-    let materials = construct_materials(
-        device,
-        queue,
-        layout,
-        parsed_obj.materials,
-        |texture_file| {
-            let texture_path = parent_path.join(texture_file);
-            load_asset_bytes(texture_path)
-        },
-    )?;
+    let mut meshes = Vec::with_capacity(objects.len());
+
+    for object in objects {
+        let num_vertices = object.mesh.positions.len() / 3;
+        let mut vertices = Vec::with_capacity(num_vertices);
+
+        for i in 0..num_vertices {
+            let position = Vec3 {
+                x: object.mesh.positions[i * 3],
+                y: object.mesh.positions[i * 3 + 1],
+                z: object.mesh.positions[i * 3 + 2],
+            };
+
+            let texture_uv = if object.mesh.texcoords.is_empty() {
+                Vec2::ZERO
+            } else {
+                Vec2 {
+                    x: object.mesh.texcoords[i * 2],
+                    y: object.mesh.texcoords[i * 2 + 1],
+                }
+            };
+
+            let normal = if object.mesh.normals.is_empty() {
+                Vec3::ZERO
+            } else {
+                Vec3 {
+                    x: object.mesh.normals[i * 3],
+                    y: object.mesh.normals[i * 3 + 1],
+                    z: object.mesh.normals[i * 3 + 2],
+                }
+            };
+
+            vertices.push(ModelVertex {
+                position,
+                texture_uv,
+                normal,
+                // We will calculate this later
+                tangent: Vec3::ZERO,
+                bitanget: Vec3::ZERO,
+            });
+        }
+
+        // calculate_tangents_and_bitangents(&object.mesh.indices, &mut vertices);
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&format!("Vertex Buffer: {}", object.name)),
+            contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&format!("Index Buffer: {}", object.name)),
+            contents: bytemuck::cast_slice(&object.mesh.indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        meshes.push(Mesh {
+            name: object.name,
+            vertex_buffer,
+            index_buffer,
+            num_indices: object.mesh.indices.len() as u32,
+            material_id: object.mesh.material_id,
+        });
+    }
 
     Ok(Model { meshes, materials })
 }
 
-fn construct_materials<F>(
+fn calculate_tangents_and_bitangents(indices: &[u32], vertices: &mut [ModelVertex]) {
+    // How many triangles each vertex is used in
+    let mut triangles_included = vec![0u32; indices.len()];
+
+    for c in indices.as_chunks::<3>().0 {
+        let c0 = c[0] as usize;
+        let c1 = c[1] as usize;
+        let c2 = c[2] as usize;
+
+        let delta_pos1 = vertices[c1].position - vertices[c0].position;
+        let delta_pos2 = vertices[c2].position - vertices[c0].position;
+
+        let delta_uv1 = vertices[c1].texture_uv - vertices[c0].texture_uv;
+        let delta_uv2 = vertices[c2].texture_uv - vertices[c0].texture_uv;
+
+        // Solving the following system of equations will
+        // give us the tangent and bitangent.
+        //     delta_pos1 = delta_uv1.x * T + delta_u.y * B
+        //     delta_pos2 = delta_uv2.x * T + delta_uv2.y * B
+        let r = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv1.y * delta_uv2.x);
+        let tangent = (delta_pos1 * delta_uv2.y - delta_pos2 * delta_uv1.y) * r;
+        let bitangent = (delta_pos2 * delta_uv1.x - delta_pos1 * delta_uv2.x) * -r;
+
+        vertices[c0].tangent += tangent;
+        vertices[c1].tangent += tangent;
+        vertices[c2].tangent += tangent;
+
+        vertices[c0].bitanget += bitangent;
+        vertices[c1].bitanget += bitangent;
+        vertices[c2].bitanget += bitangent;
+
+        triangles_included[c[0] as usize] += 1;
+        triangles_included[c[1] as usize] += 1;
+        triangles_included[c[2] as usize] += 1;
+    }
+
+    // Average the tangent/bitangent
+    for (i, n) in triangles_included.into_iter().enumerate() {
+        let denom = 1.0 / n as f32;
+        let v = &mut vertices[i];
+
+        v.tangent *= denom;
+        v.bitanget *= denom;
+    }
+}
+
+fn create_model_materials<F>(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
+    object_materials: Vec<tobj::Material>,
     layout: &BindGroupLayout,
-    object_materials: Vec<ObjectMaterial>,
     read_texture: F,
 ) -> anyhow::Result<Vec<Material>>
 where
     F: Fn(&str) -> std::io::Result<Vec<u8>>,
 {
-    let mut materials: Vec<Material> = Vec::new();
-
-    for material in object_materials {
-        let diffuse_texture = if let Some(diffuse_texture_map) = material.diffuse_map {
+    let mut materials = Vec::with_capacity(object_materials.len());
+    for mat in object_materials {
+        let diffuse_texture = if let Some(ref tex) = mat.diffuse_texture {
             Texture::from_bytes(
                 device,
                 queue,
-                &read_texture(&diffuse_texture_map)?,
+                &read_texture(tex)?,
                 wgpu::TextureFormat::Rgba8UnormSrgb,
-                &material.name,
+                Some(&format!("Diffuse Texture: {}", mat.name)),
             )?
         } else {
             Texture::from_solid_color(
                 device,
                 queue,
-                material.diffuse_color,
-                Some(&format!("Diffuse Texture: {}", material.name)),
+                [1.0, 1.0, 1.0],
+                Some(&format!("Diffuse Texture: {}", mat.name)),
             )
         };
 
-        let normal_texture = if let Some(normal_map) = material.normal_map {
+        let normal_texture = if let Some(ref tex) = mat.normal_texture {
             Texture::from_bytes(
                 device,
                 queue,
-                &read_texture(&normal_map)?,
+                &read_texture(tex)?,
                 wgpu::TextureFormat::Rgba8Unorm,
-                &material.name,
+                Some(&format!("Normal Texture: {}", mat.name)),
             )?
         } else {
             Texture::create_solid_normal(
                 device,
                 queue,
-                Some(&format!("Normal Texture: {}", material.name)),
+                Some(&format!("Normal Texture: {}", mat.name)),
             )
         };
 
-        let bind_group = crate::texture::create_bind_group(
+        let bind_group = texture::create_bind_group(
             device,
-            &format!("Bind Group: {}", material.name),
             layout,
             &[diffuse_texture, normal_texture],
+            Some(&format!("Bind Group: {}", mat.name)),
         );
 
         materials.push(Material {
-            name: material.name,
+            name: mat.name,
             bind_group,
         });
     }
 
     Ok(materials)
-}
-
-fn construct_meshes(device: &wgpu::Device, obj: &ParsedObj) -> anyhow::Result<Vec<Mesh>> {
-    let mut meshes: Vec<Mesh> = Vec::new();
-
-    for object in &obj.objects {
-        // Group faces by material ids
-        let mut groups: HashMap<Option<usize>, Vec<usize>> = HashMap::new();
-        for (i, mat_id) in object.faces_material_id.iter().enumerate() {
-            groups.entry(*mat_id).or_default().push(i);
-        }
-
-        for (material_id, face_indices) in groups {
-            let mut vertices: Vec<ModelVertex> = Vec::new();
-            let mut indices: Vec<u32> = Vec::new();
-            let mut vertex_hashmap: HashMap<(i32, Option<i32>, Option<i32>), u32> = HashMap::new();
-
-            for face_i in face_indices {
-                let face = &object.faces[face_i];
-                let resolved: Vec<u32> = face
-                    .iter()
-                    .map(|index| -> anyhow::Result<_> {
-                        let key = (index.vertex, index.texture, index.normal);
-                        if let Some(&existing) = vertex_hashmap.get(&key) {
-                            Ok(existing)
-                        } else {
-                            vertices.push(construct_vertex_from_index(obj, index)?);
-                            let value = vertices.len() as u32 - 1;
-                            vertex_hashmap.insert(key, value);
-                            Ok(value)
-                        }
-                    })
-                    .collect::<anyhow::Result<_>>()?;
-
-                for i in 1..resolved.len() - 1 {
-                    indices.push(resolved[0]);
-                    indices.push(resolved[i]);
-                    indices.push(resolved[i + 1]);
-                }
-            }
-
-            let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
-                label: Some(&format!("Vertex Buffer: {}", object.name)),
-                contents: bytemuck::cast_slice(&vertices),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-
-            let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
-                label: Some(&format!("Index Buffer: {}", object.name)),
-                contents: bytemuck::cast_slice(&indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
-
-            meshes.push(Mesh {
-                name: object.name.clone(),
-                vertex_buffer,
-                index_buffer,
-                num_indices: indices.len() as u32,
-                material_id,
-            });
-        }
-    }
-
-    Ok(meshes)
-}
-
-fn parse_obj_file<F>(file_str: &str, read_mtl: F) -> anyhow::Result<ParsedObj>
-where
-    F: Fn(&str) -> std::io::Result<String>,
-{
-    let mut parsed_obj = ParsedObj::default();
-    let mut current_material: Option<&str> = None;
-
-    for line in file_str.lines() {
-        let tokens = line.split_whitespace().collect::<Vec<_>>();
-
-        if tokens.is_empty() {
-            continue;
-        }
-
-        match tokens[0] {
-            // Geometry Vertex
-            "v" => {
-                parsed_obj.geometry_vertices.push([
-                    tokens[1].parse()?,
-                    tokens[2].parse()?,
-                    tokens[3].parse()?,
-                ]);
-            }
-
-            // Texture coordinate
-            "vt" => {
-                parsed_obj.texture_uvs.push([
-                    tokens[1].parse()?,
-                    tokens.get(2).map(|x| x.parse()).transpose()?.unwrap_or(0.0),
-                ]);
-            }
-
-            // Vertex Normal
-            "vn" => {
-                parsed_obj.vertex_normals.push([
-                    tokens[1].parse()?,
-                    tokens[2].parse()?,
-                    tokens[3].parse()?,
-                ]);
-            }
-
-            // Polygon Face
-            "f" => {
-                let face_indices = tokens
-                    .iter()
-                    .skip(1)
-                    .map(|x| -> anyhow::Result<_> {
-                        let indices = x.split('/').collect::<Vec<_>>();
-
-                        Ok(Index {
-                            vertex: indices[0].parse()?,
-                            texture: indices.get(1).map(|&x| x.parse()).transpose()?,
-                            normal: indices.get(2).map(|&x| x.parse()).transpose()?,
-                        })
-                    })
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                let object = parsed_obj
-                    .objects
-                    .last_mut()
-                    .ok_or(anyhow::anyhow!("face without parent object"))?;
-
-                object.faces.push(face_indices);
-
-                object.faces_material_id.push(
-                    current_material.and_then(|curr| {
-                        parsed_obj.materials.iter().position(|mat| mat.name == curr)
-                    }),
-                );
-            }
-
-            // Model begin
-            "o" => parsed_obj.objects.push(Object {
-                name: tokens[1].to_owned(),
-                ..Default::default()
-            }),
-
-            // Material file
-            "mtllib" => {
-                let mtl_file_str = read_mtl(tokens[1])?;
-                let material = parse_mtl_file(&mtl_file_str)?;
-                parsed_obj.materials.extend(material);
-            }
-
-            // Set Face Material
-            "usemtl" => current_material = Some(tokens[1]),
-
-            // Smoothing Group
-            "s" => warn!("obj_parser: ignoring smoothing group 's'"),
-
-            // Line Element
-            "l" => warn!("obj_parser: ignoring polyline 'l'"),
-
-            // Comment
-            "#" => {}
-
-            x => anyhow::bail!("obj_parser: unknown obj line beginning with '{x}'"),
-        }
-    }
-
-    Ok(parsed_obj)
-}
-
-fn parse_mtl_file(file_str: &str) -> anyhow::Result<Vec<ObjectMaterial>> {
-    let mut parsed_materials: Vec<ObjectMaterial> = Vec::new();
-
-    for line in file_str.lines() {
-        let tokens = line.split_whitespace().collect::<Vec<_>>();
-
-        if tokens.is_empty() {
-            continue;
-        }
-
-        match tokens[0] {
-            // New Material
-            "newmtl" => parsed_materials.push(ObjectMaterial {
-                name: tokens[1].to_owned(),
-                diffuse_color: [1.0, 1.0, 1.0],
-                ..Default::default()
-            }),
-
-            "map_Bump" => {
-                parsed_materials
-                    .last_mut()
-                    .ok_or(anyhow::anyhow!("normal map without parent material"))?
-                    .normal_map = Some(tokens[1].to_owned());
-            }
-
-            "map_Kd" => {
-                parsed_materials
-                    .last_mut()
-                    .ok_or(anyhow::anyhow!("diffuse map without parent material"))?
-                    .diffuse_map = Some(tokens[1].to_owned());
-            }
-
-            // Diffuse color
-            "Kd" => {
-                parsed_materials
-                    .last_mut()
-                    .ok_or(anyhow::anyhow!("diffuse color without parent material"))?
-                    .diffuse_color = [tokens[1].parse()?, tokens[2].parse()?, tokens[3].parse()?];
-            }
-
-            // Comment
-            "#" => {}
-
-            "Ks" => warn!("obj_parser: ignoring specular color 'Ks'"),
-
-            "Ns" => warn!("obj_parser: ignoring specular color exponent 'Ns'"),
-
-            "Ka" => warn!("obj_parser: ignoring ambient color 'Ka'"),
-
-            "Ke" => warn!("obj_parser: ignoring emissive color 'Ke'"),
-
-            "Ni" => warn!("obj_parser: ignoring optical density 'Ni'"),
-
-            "d" => warn!("obj_parser: ignoring dissolve 'd'"),
-
-            "illum" => warn!("obj_parser: ignoring illumination model 'illum'"),
-
-            x => anyhow::bail!("obj_parser: unknown mtl line beginning with '{x}'"),
-        }
-    }
-
-    Ok(parsed_materials)
-}
-
-#[derive(Debug, Default)]
-struct ParsedObj {
-    geometry_vertices: Vec<[f32; 3]>,
-    texture_uvs: Vec<[f32; 2]>,
-    vertex_normals: Vec<[f32; 3]>,
-
-    objects: Vec<Object>,
-    materials: Vec<ObjectMaterial>,
-}
-
-#[derive(Debug, Default)]
-struct Object {
-    name: String,
-    faces: Vec<Vec<Index>>,
-    faces_material_id: Vec<Option<usize>>,
-}
-
-#[derive(Debug)]
-struct Index {
-    vertex: i32,
-    texture: Option<i32>,
-    normal: Option<i32>,
-}
-
-#[derive(Debug, Default)]
-struct ObjectMaterial {
-    name: String,
-    normal_map: Option<String>,
-    diffuse_map: Option<String>,
-    diffuse_color: [f32; 3],
-}
-
-/// Get at an offset starting from 1
-fn get_at_offset<T: Clone + Copy>(buffer: &[T], offset: i32) -> Option<T> {
-    if offset.is_negative() {
-        let n = offset.unsigned_abs() as usize;
-        return buffer.iter().nth_back(n - 1).copied();
-    }
-
-    let n = offset.unsigned_abs() as usize;
-    buffer.get(n - 1).copied()
-}
-
-fn construct_vertex_from_index(obj: &ParsedObj, index: &Index) -> anyhow::Result<ModelVertex> {
-    let position = get_at_offset(&obj.geometry_vertices, index.vertex)
-        .ok_or(anyhow::anyhow!("invalid vertex data"))?;
-
-    let texture_uv = index
-        .texture
-        .and_then(|i| get_at_offset(&obj.texture_uvs, i))
-        .unwrap_or_default();
-
-    let normal = index
-        .normal
-        .and_then(|i| get_at_offset(&obj.vertex_normals, i))
-        .unwrap_or_default();
-
-    Ok(ModelVertex {
-        position,
-        texture_uv,
-        normal,
-    })
-}
-
-#[cfg(test)]
-mod test {
-    use std::path::Path;
-
-    use crate::load_asset_string;
-    use crate::parser::parse_obj_file;
-
-    #[test]
-    fn parse_obj() {
-        let file_path = Path::new("models/cube/cube.obj");
-        let file_str = load_asset_string(file_path).expect("obj file should load");
-
-        let result = parse_obj_file(&file_str, |mtl_file| {
-            let mtl_path = file_path
-                .parent()
-                .unwrap_or_else(|| Path::new("."))
-                .join(mtl_file);
-
-            load_asset_string(mtl_path)
-        });
-
-        result.expect("failed to parse obj");
-    }
 }

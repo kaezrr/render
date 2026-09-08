@@ -65,6 +65,12 @@ var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1)
 var s_diffuse: sampler;
 
+@group(0) @binding(2)
+var t_normal: texture_2d<f32>;
+
+@group(0) @binding(3)
+var s_normal: sampler;
+
 struct Light {
     position: vec4<f32>,
     color: vec4<f32>,
@@ -76,18 +82,20 @@ var<uniform> light: Light;
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let object_color = textureSample(t_diffuse, s_diffuse, in.texture_coordinates);
+    let object_normal = textureSample(t_normal, s_normal, in.texture_coordinates);
 
     let ambient_strength = 0.1;
     let ambient_color = light.color * ambient_strength;
 
+    let tangent_normal = object_normal.xyz * 2.0 - 1.0;
     let light_dir = normalize(light.position.xyz - in.world_position);
-    let diffuse_strength = max(dot(light_dir, in.world_normal), 0.0);
-    let diffuse_color = diffuse_strength * light.color;
-
     let view_dir = normalize(camera.view_position.xyz - in.world_position);
     let half_dir = normalize(view_dir + light_dir);
 
-    let specular_strength = pow(max(dot(in.world_normal, half_dir), 0.0), 32.0);
+    let diffuse_strength = max(dot(tangent_normal, light_dir), 0.0);
+    let diffuse_color = diffuse_strength * light.color;
+
+    let specular_strength = pow(max(dot(tangent_normal, half_dir), 0.0), 32.0);
     let specular_color = specular_strength * light.color;
 
     let result = (ambient_color + diffuse_color + specular_color) * object_color;

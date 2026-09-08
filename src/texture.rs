@@ -19,11 +19,11 @@ impl Texture {
         queue: &wgpu::Queue,
         bytes: &[u8],
         format: wgpu::TextureFormat,
-        label: &str,
+        label: Option<&str>,
     ) -> anyhow::Result<Self> {
         let image = image::load_from_memory(bytes)?;
 
-        Ok(Self::from_image(device, queue, &image, format, Some(label)))
+        Ok(Self::from_image(device, queue, &image, format, label))
     }
 
     pub fn from_image(
@@ -133,7 +133,7 @@ impl Texture {
             device,
             queue,
             &image::DynamicImage::ImageRgb8(image),
-            wgpu::TextureFormat::Rgba8UnormSrgb,
+            wgpu::TextureFormat::Rgba8Unorm,
             label,
         )
     }
@@ -177,9 +177,9 @@ pub fn create_bind_group_layout(
 
 pub fn create_bind_group(
     device: &wgpu::Device,
-    label: &str,
     layout: &wgpu::BindGroupLayout,
     textures: &[Texture],
+    label: Option<&str>,
 ) -> wgpu::BindGroup {
     let mut entries: Vec<wgpu::BindGroupEntry> = Vec::new();
 
@@ -199,7 +199,7 @@ pub fn create_bind_group(
     }
 
     device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some(label),
+        label,
         layout,
         entries: &entries,
     })
