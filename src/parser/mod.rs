@@ -3,6 +3,7 @@ use std::path::Path;
 
 use glam::Vec2;
 use glam::Vec3;
+use glam::Vec4;
 use wgpu::BindGroupLayout;
 use wgpu::util::DeviceExt;
 
@@ -11,7 +12,7 @@ use crate::model::Material;
 use crate::model::Mesh;
 use crate::model::Model;
 use crate::model::ModelVertex;
-use crate::texture;
+use crate::model::PropertiesUniform;
 use crate::texture::Texture;
 
 pub fn load_model_from_obj(
@@ -166,49 +167,47 @@ where
 {
     let mut materials = Vec::with_capacity(object_materials.len());
     for mat in object_materials {
-        let diffuse_texture = if let Some(ref tex) = mat.diffuse_texture {
-            Texture::from_bytes(
-                device,
-                queue,
-                &read_texture(tex)?,
-                wgpu::TextureFormat::Rgba8UnormSrgb,
-                Some(&format!("Diffuse Texture: {}", mat.name)),
-            )?
-        } else {
-            Texture::default_diffuse(
-                device,
-                queue,
-                Some(&format!("Diffuse Texture: {}", mat.name)),
-            )
+        let diffuse_texture = mat
+            .diffuse_texture
+            .map(|ref tex| -> anyhow::Result<_> {
+                Texture::from_bytes(
+                    device,
+                    queue,
+                    &read_texture(tex)?,
+                    wgpu::TextureFormat::Rgba8UnormSrgb,
+                    Some(&format!("Diffuse Texture: {}", mat.name)),
+                )
+            })
+            .transpose()?;
+
+        let normal_texture = mat
+            .normal_texture
+            .map(|ref tex| -> anyhow::Result<_> {
+                Texture::from_bytes(
+                    device,
+                    queue,
+                    &read_texture(tex)?,
+                    wgpu::TextureFormat::Rgba8Unorm,
+                    Some(&format!("Normal Texture: {}", mat.name)),
+                )
+            })
+            .transpose()?;
+
+        let properties = PropertiesUniform {
+            diffuse_color: mat
+                .diffuse
+                .map_or(Vec4::ONE, |x| Vec3::from_array(x).to_homogeneous()),
         };
 
-        let normal_texture = if let Some(ref tex) = mat.normal_texture {
-            Texture::from_bytes(
-                device,
-                queue,
-                &read_texture(tex)?,
-                wgpu::TextureFormat::Rgba8Unorm,
-                Some(&format!("Normal Texture: {}", mat.name)),
-            )?
-        } else {
-            Texture::default_normal(
-                device,
-                queue,
-                Some(&format!("Normal Texture: {}", mat.name)),
-            )
-        };
-
-        let bind_group = texture::create_bind_group(
+        materials.push(Material::new(
             device,
+            queue,
+            mat.name,
+            properties,
             layout,
-            &[diffuse_texture, normal_texture],
-            Some(&format!("Bind Group: {}", mat.name)),
-        );
-
-        materials.push(Material {
-            name: mat.name,
-            bind_group,
-        });
+            diffuse_texture,
+            normal_texture,
+        ));
     }
 
     Ok(materials)

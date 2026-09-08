@@ -139,13 +139,13 @@ impl Texture {
 
 pub fn create_bind_group_layout(
     device: &wgpu::Device,
-    label: &str,
-    texture_count: usize,
+    texture_count: u32,
+    has_uniform_buffer: bool,
+    label: Option<&str>,
 ) -> wgpu::BindGroupLayout {
-    let mut entries: Vec<wgpu::BindGroupLayoutEntry> = Vec::with_capacity(texture_count * 2);
-
+    let mut entries = Vec::with_capacity(texture_count as usize * 2);
     for i in 0..texture_count {
-        let texture_binding = i as u32 * 2;
+        let texture_binding = i * 2;
         let sampler_binding = texture_binding + 1;
 
         entries.push(wgpu::BindGroupLayoutEntry {
@@ -167,8 +167,21 @@ pub fn create_bind_group_layout(
         });
     }
 
+    if has_uniform_buffer {
+        entries.push(wgpu::BindGroupLayoutEntry {
+            binding: texture_count * 2,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        });
+    }
+
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: Some(label),
+        label,
         entries: &entries,
     })
 }
@@ -177,9 +190,10 @@ pub fn create_bind_group(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     textures: &[Texture],
+    uniform_buffer: Option<&wgpu::Buffer>,
     label: Option<&str>,
 ) -> wgpu::BindGroup {
-    let mut entries: Vec<wgpu::BindGroupEntry> = Vec::new();
+    let mut entries = Vec::with_capacity(textures.len() * 2);
 
     for (i, texture) in textures.iter().enumerate() {
         let texture_binding = i as u32 * 2;
@@ -193,6 +207,13 @@ pub fn create_bind_group(
         entries.push(wgpu::BindGroupEntry {
             binding: sampler_binding,
             resource: wgpu::BindingResource::Sampler(&texture.sampler),
+        });
+    }
+
+    if let Some(buffer) = uniform_buffer {
+        entries.push(wgpu::BindGroupEntry {
+            binding: textures.len() as u32 * 2,
+            resource: buffer.as_entire_binding(),
         });
     }
 

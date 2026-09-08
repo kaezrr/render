@@ -1,8 +1,14 @@
 mod vertex;
 use core::ops::Range;
 
+use bytemuck::Pod;
+use bytemuck::Zeroable;
+use glam::Vec4;
 pub use vertex::GpuVertex;
 pub use vertex::ModelVertex;
+use wgpu::util::DeviceExt;
+
+use crate::texture;
 
 #[expect(unused, reason = "Only using draw model instanced for now")]
 pub trait DrawModel {
@@ -76,6 +82,77 @@ pub struct Material {
     #[expect(unused, reason = "Material name is for debug purposes")]
     pub name: String,
     pub bind_group: wgpu::BindGroup,
+
+    #[expect(unused, reason = "Material properites are constant after creation")]
+    properties: PropertiesUniform,
+    #[expect(unused, reason = "Material properites are constant after creation")]
+    buffer: wgpu::Buffer,
+}
+
+impl Material {
+    /// First texture is diffuse texture, second texture is normal texture
+    /// If any are absent a default one will be created instead
+    pub fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        name: String,
+        properties: PropertiesUniform,
+        layout: &wgpu::BindGroupLayout,
+        diffuse_texture: Option<texture::Texture>,
+        normal_texture: Option<texture::Texture>,
+    ) -> Self {
+        let textures = [
+            diffuse_texture.unwrap_or_else(|| {
+                texture::Texture::default_diffuse(
+                    device,
+                    queue,
+                    Some(&format!("Default Diffuse: {name}")),
+                )
+            }),
+            normal_texture.unwrap_or_else(|| {
+                texture::Texture::default_normal(
+                    device,
+                    queue,
+                    Some(&format!("Default Normal: {name}")),
+                )
+            }),
+        ];
+
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&format!("Uniform Buffer: {name}")),
+            contents: bytemuck::cast_slice(&[properties]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let bind_group = texture::create_bind_group(
+            device,
+            layout,
+            &textures,
+            Some(&buffer),
+            Some(&format!("Bind Group: {name}")),
+        );
+
+        queue.write_buffer(&buffer, 0, bytemuck::cast_slice(&[properties]));
+
+        Self {
+            name,
+            bind_group,
+            properties,
+            buffer,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct PropertiesUniform {
+    pub diffuse_color: Vec4,
+}
+
+impl PropertiesUniform {
+    pub const DEFAULT_MAT: Self = PropertiesUniform {
+        diffuse_color: Vec4::new(1.0, 0.0, 1.0, 1.0),
+    };
 }
 
 #[derive(Debug)]

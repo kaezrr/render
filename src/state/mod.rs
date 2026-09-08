@@ -36,6 +36,7 @@ use crate::model::GpuVertex;
 use crate::model::Material;
 use crate::model::Model;
 use crate::model::ModelVertex;
+use crate::model::PropertiesUniform;
 use crate::parser::load_model_from_obj;
 use crate::pipeline;
 use crate::state::gpu::GpuContext;
@@ -69,18 +70,27 @@ impl State<'_> {
 
         let light = create_light_bundle(&gpu_context.device);
 
-        let material_layout = texture::create_bind_group_layout(
+        let material_bind_group_layout = texture::create_bind_group_layout(
             &gpu_context.device,
-            "Bind Group Layout: default_material",
-            2, // 2 textures, one diffuse texture and a one normal map
+            2,    // Diffuse and Normal Texture
+            true, // with uniform buffer for properties
+            Some("Material Bind Group Layout"),
         );
 
-        let default_material = create_default_material(&gpu_context, &material_layout);
+        let default_material = Material::new(
+            &gpu_context.device,
+            &gpu_context.queue,
+            "Default Material".to_string(),
+            PropertiesUniform::DEFAULT_MAT,
+            &material_bind_group_layout,
+            None,
+            None,
+        );
 
         let obj_model = load_model_from_obj(
             &gpu_context.device,
             &gpu_context.queue,
-            &material_layout,
+            &material_bind_group_layout,
             "models/cube/cube.obj",
         )?;
 
@@ -91,7 +101,7 @@ impl State<'_> {
                     label: Some("Model Pipeline Layout"),
                     immediate_size: 0,
                     bind_group_layouts: &[
-                        Some(&material_layout),
+                        Some(&material_bind_group_layout),
                         Some(&camera.bind_group_layout),
                         Some(&light.bind_group_layout),
                     ],
@@ -310,32 +320,6 @@ impl State<'_> {
         self.window.set_cursor_visible(true);
         self.cursor_grabbed = false;
         Ok(())
-    }
-}
-
-fn create_default_material(gpu_context: &GpuContext, layout: &wgpu::BindGroupLayout) -> Material {
-    let diffuse_texture = Texture::default_diffuse(
-        &gpu_context.device,
-        &gpu_context.queue,
-        Some("Default Render Texture"),
-    );
-
-    let normal_texture = Texture::default_normal(
-        &gpu_context.device,
-        &gpu_context.queue,
-        Some("Default Normal Texture"),
-    );
-
-    let bind_group = texture::create_bind_group(
-        &gpu_context.device,
-        layout,
-        &[diffuse_texture, normal_texture],
-        Some("Bind Group: default_material"),
-    );
-
-    Material {
-        name: "default render material".to_string(),
-        bind_group,
     }
 }
 
