@@ -1,18 +1,12 @@
-use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
 
-use anyhow::Result;
 use glam::Vec2;
 use glam::Vec3;
-use log::warn;
 use wgpu::BindGroupLayout;
-use wgpu::util::BufferInitDescriptor;
 use wgpu::util::DeviceExt;
 
 use crate::create_asset_path;
-use crate::load_asset_bytes;
-use crate::load_asset_string;
 use crate::model::Material;
 use crate::model::Mesh;
 use crate::model::Model;
@@ -181,10 +175,9 @@ where
                 Some(&format!("Diffuse Texture: {}", mat.name)),
             )?
         } else {
-            Texture::from_solid_color(
+            Texture::default_diffuse(
                 device,
                 queue,
-                [1.0, 1.0, 1.0],
                 Some(&format!("Diffuse Texture: {}", mat.name)),
             )
         };
@@ -198,7 +191,7 @@ where
                 Some(&format!("Normal Texture: {}", mat.name)),
             )?
         } else {
-            Texture::create_solid_normal(
+            Texture::default_normal(
                 device,
                 queue,
                 Some(&format!("Normal Texture: {}", mat.name)),

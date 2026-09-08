@@ -108,25 +108,7 @@ impl Texture {
         Self { view, sampler }
     }
 
-    pub fn from_solid_color(
-        device: &Device,
-        queue: &wgpu::Queue,
-        color: [f32; 3],
-        label: Option<&str>,
-    ) -> Self {
-        let pixel = image::Rgb(color);
-        let image = image::Rgb32FImage::from_pixel(1, 1, pixel);
-
-        Self::from_image(
-            device,
-            queue,
-            &image::DynamicImage::ImageRgb32F(image),
-            wgpu::TextureFormat::Rgba8UnormSrgb,
-            label,
-        )
-    }
-
-    pub fn create_solid_normal(device: &Device, queue: &wgpu::Queue, label: Option<&str>) -> Self {
+    pub fn default_normal(device: &wgpu::Device, queue: &wgpu::Queue, label: Option<&str>) -> Self {
         let image = image::RgbImage::from_pixel(1, 1, image::Rgb([128, 128, 255]));
 
         Self::from_image(
@@ -134,6 +116,22 @@ impl Texture {
             queue,
             &image::DynamicImage::ImageRgb8(image),
             wgpu::TextureFormat::Rgba8Unorm,
+            label,
+        )
+    }
+
+    pub fn default_diffuse(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        label: Option<&str>,
+    ) -> Self {
+        let image = image::RgbImage::from_pixel(1, 1, image::Rgb([255, 255, 255]));
+
+        Self::from_image(
+            device,
+            queue,
+            &image::DynamicImage::ImageRgb8(image),
+            wgpu::TextureFormat::Rgba8UnormSrgb,
             label,
         )
     }

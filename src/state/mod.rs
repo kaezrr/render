@@ -314,14 +314,13 @@ impl State<'_> {
 }
 
 fn create_default_material(gpu_context: &GpuContext, layout: &wgpu::BindGroupLayout) -> Material {
-    let diffuse_texture = Texture::from_solid_color(
+    let diffuse_texture = Texture::default_diffuse(
         &gpu_context.device,
         &gpu_context.queue,
-        [1.0, 0.0, 1.0],
         Some("Default Render Texture"),
     );
 
-    let normal_texture = Texture::create_solid_normal(
+    let normal_texture = Texture::default_normal(
         &gpu_context.device,
         &gpu_context.queue,
         Some("Default Normal Texture"),
