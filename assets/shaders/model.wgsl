@@ -10,13 +10,16 @@ struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) texture_coordinates: vec2<f32>,
     @location(2) normal: vec3<f32>,
+    @location(3) tangent: vec3<f32>,
+    @location(4) bitangent: vec3<f32>,
 }
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) texture_coordinates: vec2<f32>,
-    @location(1) world_normal: vec3<f32>,
-    @location(2) world_position: vec3<f32>,
+    @location(1) tangent_position: vec3<f32>,
+    @location(2) tangent_light_position: vec3<f32>,
+    @location(3) tangent_view_position: vec3<f32>,
 }
 
 struct InstanceInput {
@@ -47,14 +50,26 @@ fn vs_main(
         instance.normal_matrix_2,
     );
 
-    var out: VertexOutput;
+    let world_normal = normalize(normal_matrix * model.normal);
+    let world_tangent = normalize(normal_matrix * model.tangent);
+    let world_bitangent = normalize(normal_matrix * model.bitangent);
 
-    out.texture_coordinates = model.texture_coordinates;
-    out.world_normal = normal_matrix * model.normal;
+    let tangent_matrix = transpose(mat3x3(
+        world_tangent,
+        world_bitangent,
+        world_normal
+    ));
 
     var world_position = model_matrix * vec4(model.position, 1.0);
-    out.world_position = world_position.xyz;
+
+    var out: VertexOutput;
+
     out.clip_position = camera.view_projection * world_position;
+    out.texture_coordinates = model.texture_coordinates;
+
+    out.tangent_position = tangent_matrix * world_position.xyz;
+    out.tangent_view_position = tangent_matrix * camera.view_position.xyz;
+    out.tangent_light_position = tangent_matrix * light.position.xyz;
 
     return out;
 }
@@ -88,8 +103,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let ambient_color = light.color * ambient_strength;
 
     let tangent_normal = object_normal.xyz * 2.0 - 1.0;
-    let light_dir = normalize(light.position.xyz - in.world_position);
-    let view_dir = normalize(camera.view_position.xyz - in.world_position);
+    let light_dir = normalize(in.tangent_light_position - in.tangent_position);
+    let view_dir = normalize(in.tangent_view_position - in.tangent_position);
     let half_dir = normalize(view_dir + light_dir);
 
     let diffuse_strength = max(dot(tangent_normal, light_dir), 0.0);

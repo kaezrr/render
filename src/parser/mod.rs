@@ -88,7 +88,7 @@ pub fn load_model_from_obj(
             });
         }
 
-        // calculate_tangents_and_bitangents(&object.mesh.indices, &mut vertices);
+        calculate_tangents_and_bitangents(&object.mesh.indices, &mut vertices);
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(&format!("Vertex Buffer: {}", object.name)),
@@ -116,7 +116,7 @@ pub fn load_model_from_obj(
 
 fn calculate_tangents_and_bitangents(indices: &[u32], vertices: &mut [ModelVertex]) {
     // How many triangles each vertex is used in
-    let mut triangles_included = vec![0u32; indices.len()];
+    let mut triangles_included = vec![0u32; vertices.len()];
 
     for c in indices.as_chunks::<3>().0 {
         let c0 = c[0] as usize;
