@@ -91,7 +91,7 @@ impl State<'_> {
             &gpu_context.device,
             &gpu_context.queue,
             &material_bind_group_layout,
-            "models/cube/cube.obj",
+            "models/donut/donut.obj",
         )?;
 
         let render_pipeline = {
@@ -325,7 +325,7 @@ impl State<'_> {
 
 fn create_instance_bundle(device: &wgpu::Device) -> InstanceBundle {
     const SPACE_BETWEEN: f32 = 3.0;
-    const NUM_INSTANCES_PER_ROW: u32 = 10;
+    const NUM_INSTANCES_PER_ROW: u32 = 1;
 
     let instances = (0..NUM_INSTANCES_PER_ROW)
         .flat_map(|z| {
@@ -338,7 +338,7 @@ fn create_instance_bundle(device: &wgpu::Device) -> InstanceBundle {
                 let rotation = if position == Vec3::ZERO {
                     Quat::from_axis_angle(Vec3::Z, 0.0f32.to_radians())
                 } else {
-                    Quat::from_axis_angle(position.normalize(), 45.0f32.to_radians())
+                    Quat::from_axis_angle(position.normalize(), 0.0f32.to_radians())
                 };
 
                 Instance {

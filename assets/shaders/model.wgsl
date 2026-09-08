@@ -68,7 +68,7 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let object_color = textureSample(t_diffuse, s_diffuse, in.texture_coordinates);
+    let object_color = textureSample(t_diffuse, s_diffuse, in.texture_coordinates) * properties.diffuse_color;
     let object_normal = textureSample(t_normal, s_normal, in.texture_coordinates);
 
     let ambient_strength = 0.1;
