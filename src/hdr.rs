@@ -117,6 +117,6 @@ impl HdrPipeline {
     }
 
     pub fn view(&self) -> &wgpu::TextureView {
-        &self.texture.view
+        self.texture.view()
     }
 }

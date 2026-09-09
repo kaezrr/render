@@ -6,8 +6,8 @@ use wgpu::wgt::TextureDescriptor;
 
 #[derive(Debug)]
 pub struct Texture {
-    pub view: wgpu::TextureView,
-    pub sampler: wgpu::Sampler,
+    view: wgpu::TextureView,
+    sampler: wgpu::Sampler,
 }
 
 impl Texture {
@@ -171,6 +171,10 @@ impl Texture {
             wgpu::TextureFormat::Rgba8UnormSrgb,
             label,
         )
+    }
+
+    pub fn view(&self) -> &wgpu::TextureView {
+        &self.view
     }
 }
 
