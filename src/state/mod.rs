@@ -118,7 +118,7 @@ impl State<'_> {
             pipeline::create_render_pipeline(
                 &gpu_context.device,
                 &layout,
-                gpu_context.config.format,
+                HdrPipeline::TEXTURE_FORMAT,
                 Some(Texture::DEPTH_FORMAT),
                 &[Some(ModelVertex::desc()), Some(InstanceRaw::desc())],
                 shader,
@@ -146,7 +146,7 @@ impl State<'_> {
             pipeline::create_render_pipeline(
                 &gpu_context.device,
                 &layout,
-                gpu_context.config.format,
+                HdrPipeline::TEXTURE_FORMAT,
                 Some(Texture::DEPTH_FORMAT),
                 &[Some(ModelVertex::desc())],
                 shader,
@@ -215,7 +215,7 @@ impl State<'_> {
         let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("render pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
-                view: &texture_view,
+                view: self.hdr.view(),
                 depth_slice: None,
                 resolve_target: None,
                 ops: Operations {
@@ -260,6 +260,8 @@ impl State<'_> {
         );
 
         drop(render_pass);
+
+        self.hdr.process(&mut command_encoder, &texture_view);
 
         self.gpu_context
             .queue

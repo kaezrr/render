@@ -14,7 +14,7 @@ pub struct HdrPipeline {
 }
 
 impl HdrPipeline {
-    const HDR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+    pub const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
     pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> anyhow::Result<Self> {
         let wgpu::SurfaceConfiguration { width, height, .. } = *config;
@@ -23,7 +23,7 @@ impl HdrPipeline {
             device,
             width,
             height,
-            Self::HDR_FORMAT,
+            Self::TEXTURE_FORMAT,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
             wgpu::FilterMode::Nearest,
             Some("HdrPipeline::texture"),
@@ -78,7 +78,7 @@ impl HdrPipeline {
             device,
             width,
             height,
-            Self::HDR_FORMAT,
+            Self::TEXTURE_FORMAT,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
             wgpu::FilterMode::Nearest,
             Some("HdrPipeline::texture"),
