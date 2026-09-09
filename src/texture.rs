@@ -1,5 +1,4 @@
 use image::GenericImageView;
-use wgpu::Device;
 use wgpu::TextureUsages;
 use wgpu::util::DeviceExt;
 use wgpu::wgt::SamplerDescriptor;
@@ -71,12 +70,11 @@ impl Texture {
     }
 
     pub fn create_depth_texture(
-        device: &Device,
+        device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
-        label: &str,
     ) -> Self {
         let texture = device.create_texture(&TextureDescriptor {
-            label: Some(label),
+            label: Some("Depth Texture"),
             size: wgpu::Extent3d {
                 width: config.width.max(1),
                 height: config.height.max(1),
@@ -86,7 +84,7 @@ impl Texture {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
-            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
         });
 
@@ -102,6 +100,45 @@ impl Texture {
             lod_min_clamp: 0.0,
             lod_max_clamp: 100.0,
             compare: Some(wgpu::CompareFunction::LessEqual),
+            ..Default::default()
+        });
+
+        Self { view, sampler }
+    }
+
+    pub fn create_2d_texture(
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        format: wgpu::TextureFormat,
+        usage: wgpu::TextureUsages,
+        filter_mode: wgpu::FilterMode,
+        label: Option<&str>,
+    ) -> Self {
+        let texture = device.create_texture(&TextureDescriptor {
+            label,
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage,
+            view_formats: &[],
+        });
+
+        let view = texture.create_view(&wgpu::wgt::TextureViewDescriptor::default());
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: filter_mode,
+            min_filter: filter_mode,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
 
@@ -189,7 +226,7 @@ pub fn create_bind_group_layout(
 pub fn create_bind_group(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
-    textures: &[Texture],
+    textures: &[&Texture],
     uniform_buffer: Option<&wgpu::Buffer>,
     label: Option<&str>,
 ) -> wgpu::BindGroup {

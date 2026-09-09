@@ -24,6 +24,7 @@ use winit::window::Window;
 use crate::camera::Camera;
 use crate::camera::CameraBundle;
 use crate::camera::Projection;
+use crate::hdr::HdrPipeline;
 use crate::instance::Instance;
 use crate::instance::InstanceBundle;
 use crate::instance::InstanceRaw;
@@ -59,6 +60,8 @@ pub struct State<'a> {
     light: LightBundle,
     light_render_pipeline: RenderPipeline,
 
+    hdr: HdrPipeline,
+
     cursor_grabbed: bool,
 }
 
@@ -91,7 +94,7 @@ impl State<'_> {
             &gpu_context.device,
             &gpu_context.queue,
             &material_bind_group_layout,
-            "models/donut/donut.obj",
+            "models/cube/cube.obj",
         )?;
 
         let render_pipeline = {
@@ -114,12 +117,12 @@ impl State<'_> {
 
             pipeline::create_render_pipeline(
                 &gpu_context.device,
-                "Model Render Pipeline",
                 &layout,
                 gpu_context.config.format,
                 Some(Texture::DEPTH_FORMAT),
                 &[Some(ModelVertex::desc()), Some(InstanceRaw::desc())],
                 shader,
+                Some("Model Render Pipeline"),
             )
         };
 
@@ -142,22 +145,20 @@ impl State<'_> {
 
             pipeline::create_render_pipeline(
                 &gpu_context.device,
-                "Light Render Pipeline",
                 &layout,
                 gpu_context.config.format,
                 Some(Texture::DEPTH_FORMAT),
                 &[Some(ModelVertex::desc())],
                 shader,
+                Some("Light Render Pipeline"),
             )
         };
 
         let instance_bundle = create_instance_bundle(&gpu_context.device);
 
-        let depth_texture = Texture::create_depth_texture(
-            &gpu_context.device,
-            &gpu_context.config,
-            "depth_texture",
-        );
+        let depth_texture = Texture::create_depth_texture(&gpu_context.device, &gpu_context.config);
+
+        let hdr = HdrPipeline::new(&gpu_context.device, &gpu_context.config)?;
 
         Ok(Self {
             window,
@@ -173,6 +174,8 @@ impl State<'_> {
 
             light,
             light_render_pipeline,
+
+            hdr,
 
             cursor_grabbed: false,
         })
@@ -299,13 +302,15 @@ impl State<'_> {
     }
 
     pub fn resize_surface(&mut self, width: u32, height: u32) {
+        if width == 0 || height == 0 {
+            return;
+        }
+
         self.camera.projection.resize(width, height);
         self.gpu_context.resize_surface(width, height);
-        self.depth_texture = Texture::create_depth_texture(
-            &self.gpu_context.device,
-            &self.gpu_context.config,
-            "depth_texture",
-        );
+        self.hdr.resize(&self.gpu_context.device, width, height);
+        self.depth_texture =
+            Texture::create_depth_texture(&self.gpu_context.device, &self.gpu_context.config);
     }
 
     pub fn capture_mouse(&mut self) -> anyhow::Result<()> {
@@ -325,7 +330,7 @@ impl State<'_> {
 
 fn create_instance_bundle(device: &wgpu::Device) -> InstanceBundle {
     const SPACE_BETWEEN: f32 = 3.0;
-    const NUM_INSTANCES_PER_ROW: u32 = 1;
+    const NUM_INSTANCES_PER_ROW: u32 = 10;
 
     let instances = (0..NUM_INSTANCES_PER_ROW)
         .flat_map(|z| {
@@ -338,7 +343,7 @@ fn create_instance_bundle(device: &wgpu::Device) -> InstanceBundle {
                 let rotation = if position == Vec3::ZERO {
                     Quat::from_axis_angle(Vec3::Z, 0.0f32.to_radians())
                 } else {
-                    Quat::from_axis_angle(position.normalize(), 0.0f32.to_radians())
+                    Quat::from_axis_angle(position.normalize(), 45.0f32.to_radians())
                 };
 
                 Instance {

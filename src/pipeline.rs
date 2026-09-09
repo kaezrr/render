@@ -19,17 +19,17 @@ use wgpu::VertexState;
 
 pub fn create_render_pipeline(
     device: &Device,
-    label: &str,
     layout: &wgpu::PipelineLayout,
     color_format: TextureFormat,
     depth_stencil_format: Option<TextureFormat>,
     vertex_layouts: &[Option<wgpu::VertexBufferLayout>],
     shader: ShaderModuleDescriptor,
+    label: Option<&str>,
 ) -> RenderPipeline {
     let shader_module = device.create_shader_module(shader);
 
     device.create_render_pipeline(&RenderPipelineDescriptor {
-        label: Some(label),
+        label,
         layout: Some(layout),
         vertex: VertexState {
             module: &shader_module,

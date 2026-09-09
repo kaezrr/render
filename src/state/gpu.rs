@@ -89,12 +89,10 @@ impl GpuContext<'_> {
     }
 
     pub fn resize_surface(&mut self, width: u32, height: u32) {
-        if width > 0 && height > 0 {
-            self.config.width = width;
-            self.config.height = height;
-            self.configure_surface();
-            self.is_surface_configured = true;
-        }
+        self.config.width = width;
+        self.config.height = height;
+        self.configure_surface();
+        self.is_surface_configured = true;
     }
 
     pub fn configure_surface(&self) {

@@ -102,14 +102,14 @@ impl Material {
         normal_texture: Option<texture::Texture>,
     ) -> Self {
         let textures = [
-            diffuse_texture.unwrap_or_else(|| {
+            &diffuse_texture.unwrap_or_else(|| {
                 texture::Texture::default_diffuse(
                     device,
                     queue,
                     Some(&format!("Default Diffuse: {name}")),
                 )
             }),
-            normal_texture.unwrap_or_else(|| {
+            &normal_texture.unwrap_or_else(|| {
                 texture::Texture::default_normal(
                     device,
                     queue,

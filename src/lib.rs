@@ -1,6 +1,7 @@
 #![feature(file_buffered)]
 
 mod camera;
+mod hdr;
 mod instance;
 mod light;
 mod model;
