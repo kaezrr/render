@@ -28,6 +28,7 @@ use crate::environment::SkyBoxPipeline;
 use crate::hdr::HdrPipeline;
 use crate::instance::InstanceBundle;
 use crate::instance::InstanceRaw;
+use crate::light::DrawLight;
 use crate::light::LightBundle;
 use crate::light::LightUniform;
 use crate::load_asset_string;
@@ -49,7 +50,6 @@ pub struct State<'a> {
     window: Arc<Window>,
     gpu_context: GpuContext<'a>,
 
-    obj_model: Model,
     depth_texture: Texture,
     instance_bundle: InstanceBundle,
     default_material: Material,
@@ -60,6 +60,10 @@ pub struct State<'a> {
     hdr_tonemap: HdrPipeline,
     skybox: SkyBoxPipeline,
     model_render_pipeline: RenderPipeline,
+    light_debug_pipeline: RenderPipeline,
+
+    showcase_model: Model,
+    light_debug_model: Model,
 
     cursor_grabbed: bool,
 }
@@ -92,18 +96,25 @@ impl State<'_> {
             None,
         );
 
-        let obj_model = load_model_from_obj(
+        let showcase_model = load_model_from_obj(
             &gpu_context.device,
             &gpu_context.queue,
             &material_bind_group_layout,
             "models/skull/Skull.obj",
         )?;
 
+        let light_debug_model = load_model_from_obj(
+            &gpu_context.device,
+            &gpu_context.queue,
+            &material_bind_group_layout,
+            "models/sphere/sphere.obj",
+        )?;
+
         let instance_bundle = InstanceBundle::single(&gpu_context.device);
 
         let depth_texture = Texture::create_depth_texture(&gpu_context.device, &gpu_context.config);
 
-        let hdr_pipeline = HdrPipeline::new(&gpu_context.device, &gpu_context.config)?;
+        let hdr_tonemap = HdrPipeline::new(&gpu_context.device, &gpu_context.config)?;
 
         let skybox = SkyBoxPipeline::new(
             &gpu_context.device,
@@ -122,18 +133,28 @@ impl State<'_> {
             ],
         )?;
 
+        let light_debug_pipeline = create_light_render_pipeline(
+            &gpu_context.device,
+            &[
+                Some(&camera.bind_group_layout),
+                Some(&light.bind_group_layout),
+            ],
+        )?;
+
         Ok(Self {
             window,
             gpu_context,
-            obj_model,
             depth_texture,
             instance_bundle,
             default_material,
             camera,
             light,
-            hdr_tonemap: hdr_pipeline,
+            hdr_tonemap,
             skybox,
             model_render_pipeline,
+            light_debug_pipeline,
+            showcase_model,
+            light_debug_model,
             cursor_grabbed: false,
         })
     }
@@ -200,13 +221,19 @@ impl State<'_> {
 
         self.skybox.draw(&mut render_pass, &self.camera.bind_group);
 
+        render_pass.set_pipeline(&self.light_debug_pipeline);
+        render_pass.draw_light_model(
+            &self.light_debug_model,
+            &self.camera.bind_group,
+            &self.light.bind_group,
+        );
+
         render_pass.set_pipeline(&self.model_render_pipeline);
         render_pass.set_vertex_buffer(1, self.instance_bundle.buffer.slice(..));
 
-        render_pass.draw_model_instanced(
-            &self.obj_model,
+        render_pass.draw_model(
+            &self.showcase_model,
             &self.default_material,
-            0..self.instance_bundle.instances.len() as u32,
             &self.camera.bind_group,
             &self.light.bind_group,
             &self.skybox.bind_group,
@@ -261,8 +288,10 @@ impl State<'_> {
 
         self.camera.projection.resize(width, height);
         self.gpu_context.resize_surface(width, height);
+
         self.hdr_tonemap
             .resize(&self.gpu_context.device, width, height);
+
         self.depth_texture =
             Texture::create_depth_texture(&self.gpu_context.device, &self.gpu_context.config);
     }
@@ -331,7 +360,6 @@ fn create_model_render_pipeline(
     ))
 }
 
-#[expect(unused, reason = "Not debugging light for now")]
 fn create_light_render_pipeline(
     device: &wgpu::Device,
     bind_group_layouts: &[Option<&wgpu::BindGroupLayout>],
