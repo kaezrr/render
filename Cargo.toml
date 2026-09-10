@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["hadal"]
+members = ["hadal", "hadal-loaders", "hadal-viewer"]
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }

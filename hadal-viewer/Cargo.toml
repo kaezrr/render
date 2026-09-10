@@ -1,0 +1,14 @@
+[package]
+name = "hadal-viewer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+env_logger = "0.11.11"
+hadal = { path = "../hadal" }
+hadal-loaders = { path = "../hadal-loaders" }
+winit = "0.30.13"
+
+[lints]
+workspace = true

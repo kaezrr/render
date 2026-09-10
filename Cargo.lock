@@ -903,13 +903,30 @@ dependencies = [
  "anyhow",
  "bitflags 2.13.1",
  "bytemuck",
- "env_logger",
  "glam",
  "image",
  "log",
  "pollster",
  "tobj",
  "wgpu",
+ "winit",
+]
+
+[[package]]
+name = "hadal-loaders"
+version = "0.1.0"
+dependencies = [
+ "hadal",
+]
+
+[[package]]
+name = "hadal-viewer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "env_logger",
+ "hadal",
+ "hadal-loaders",
  "winit",
 ]
 
