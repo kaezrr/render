@@ -1,6 +1,7 @@
 #![feature(file_buffered)]
 
 mod camera;
+mod environment;
 mod hdr;
 mod instance;
 mod light;
@@ -54,7 +55,8 @@ impl ApplicationHandler for App {
         let window = {
             let attributes = Window::default_attributes()
                 .with_title("Render - PROJECT")
-                .with_inner_size(LogicalSize::new(800, 600));
+                .with_inner_size(LogicalSize::new(800, 600))
+                .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
 
             Arc::new(
                 event_loop

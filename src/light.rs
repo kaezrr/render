@@ -18,6 +18,7 @@ pub struct LightUniform {
     pub color: Vec4,
 }
 
+#[expect(unused, reason = "Not debugging light for now")]
 pub trait DrawLight {
     fn draw_light_mesh(
         &mut self,

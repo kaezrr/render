@@ -86,4 +86,16 @@ impl InstanceBundle {
 
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&raw_instances));
     }
+
+    /// Create a single instance
+    pub fn single(device: &wgpu::Device) -> Self {
+        Self::new(
+            device,
+            vec![Instance {
+                position: Vec3::ZERO,
+                rotation: Quat::IDENTITY,
+                scale: Vec3::ONE,
+            }],
+        )
+    }
 }
