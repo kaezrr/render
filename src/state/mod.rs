@@ -106,35 +106,6 @@ impl State<'_> {
             "models/cube/cube.obj",
         )?;
 
-        let render_pipeline = {
-            let layout = gpu_context
-                .device
-                .create_pipeline_layout(&PipelineLayoutDescriptor {
-                    label: Some("Model Pipeline Layout"),
-                    immediate_size: 0,
-                    bind_group_layouts: &[
-                        Some(&material_bind_group_layout),
-                        Some(&camera.bind_group_layout),
-                        Some(&light.bind_group_layout),
-                    ],
-                });
-
-            let shader = ShaderModuleDescriptor {
-                label: Some("Model Shader"),
-                source: wgpu::ShaderSource::Wgsl(load_asset_string("shaders/model.wgsl")?.into()),
-            };
-
-            pipeline::create_render_pipeline(
-                &gpu_context.device,
-                &layout,
-                HdrPipeline::TEXTURE_FORMAT,
-                Some(Texture::DEPTH_FORMAT),
-                &[Some(ModelVertex::desc()), Some(InstanceRaw::desc())],
-                shader,
-                Some("Model Render Pipeline"),
-            )
-        };
-
         let light_render_pipeline = {
             let layout = gpu_context
                 .device
@@ -179,7 +150,7 @@ impl State<'_> {
             Some("Sky Texture"),
         )?;
 
-        let environment_layout = texture::util::create_bind_group_layout(
+        let env_bind_group_layout = texture::util::create_bind_group_layout(
             &gpu_context.device,
             1,
             false,
@@ -191,7 +162,7 @@ impl State<'_> {
 
         let environment_bind_group = texture::util::create_bind_group(
             &gpu_context.device,
-            &environment_layout,
+            &env_bind_group_layout,
             &[&sky_texture],
             None,
             Some("environment_bind_group"),
@@ -205,7 +176,7 @@ impl State<'_> {
                         label: None,
                         bind_group_layouts: &[
                             Some(&camera.bind_group_layout),
-                            Some(&environment_layout),
+                            Some(&env_bind_group_layout),
                         ],
                         immediate_size: 0,
                     });
@@ -226,6 +197,35 @@ impl State<'_> {
             )
         };
 
+        let render_pipeline = {
+            let layout = gpu_context
+                .device
+                .create_pipeline_layout(&PipelineLayoutDescriptor {
+                    label: Some("Model Pipeline Layout"),
+                    immediate_size: 0,
+                    bind_group_layouts: &[
+                        Some(&material_bind_group_layout),
+                        Some(&camera.bind_group_layout),
+                        Some(&light.bind_group_layout),
+                        Some(&env_bind_group_layout),
+                    ],
+                });
+
+            let shader = ShaderModuleDescriptor {
+                label: Some("Model Shader"),
+                source: wgpu::ShaderSource::Wgsl(load_asset_string("shaders/model.wgsl")?.into()),
+            };
+
+            pipeline::create_render_pipeline(
+                &gpu_context.device,
+                &layout,
+                HdrPipeline::TEXTURE_FORMAT,
+                Some(Texture::DEPTH_FORMAT),
+                &[Some(ModelVertex::desc()), Some(InstanceRaw::desc())],
+                shader,
+                Some("Model Render Pipeline"),
+            )
+        };
         Ok(Self {
             window,
             gpu_context,
@@ -330,6 +330,7 @@ impl State<'_> {
             0..self.instance_bundle.instances.len() as u32,
             &self.camera.bind_group,
             &self.light.bind_group,
+            &self.environment_bind_group,
         );
 
         drop(render_pass);

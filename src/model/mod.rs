@@ -18,8 +18,16 @@ pub trait DrawModel {
         material: &Material,
         camera_bind_group: &wgpu::BindGroup,
         light_bind_group: &wgpu::BindGroup,
+        env_bind_group: &wgpu::BindGroup,
     ) {
-        self.draw_mesh_instanced(mesh, material, 0..1, camera_bind_group, light_bind_group);
+        self.draw_mesh_instanced(
+            mesh,
+            material,
+            0..1,
+            camera_bind_group,
+            light_bind_group,
+            env_bind_group,
+        );
     }
 
     fn draw_mesh_instanced(
@@ -29,6 +37,7 @@ pub trait DrawModel {
         instances: Range<u32>,
         camera_bind_group: &wgpu::BindGroup,
         light_bind_group: &wgpu::BindGroup,
+        env_bind_group: &wgpu::BindGroup,
     );
 
     fn draw_model(
@@ -37,6 +46,7 @@ pub trait DrawModel {
         default_material: &Material,
         camera_bind_group: &wgpu::BindGroup,
         light_bind_group: &wgpu::BindGroup,
+        env_bind_group: &wgpu::BindGroup,
     ) {
         self.draw_model_instanced(
             model,
@@ -44,6 +54,7 @@ pub trait DrawModel {
             0..1,
             camera_bind_group,
             light_bind_group,
+            env_bind_group,
         );
     }
 
@@ -54,6 +65,7 @@ pub trait DrawModel {
         instances: Range<u32>,
         camera_bind_group: &wgpu::BindGroup,
         light_bind_group: &wgpu::BindGroup,
+        env_bind_group: &wgpu::BindGroup,
     ) {
         for mesh in &model.meshes {
             let material = mesh
@@ -66,6 +78,7 @@ pub trait DrawModel {
                 instances.clone(),
                 camera_bind_group,
                 light_bind_group,
+                env_bind_group,
             );
         }
     }
@@ -173,10 +186,12 @@ impl DrawModel for wgpu::RenderPass<'_> {
         instances: Range<u32>,
         camera_bind_group: &wgpu::BindGroup,
         light_bind_group: &wgpu::BindGroup,
+        env_bind_group: &wgpu::BindGroup,
     ) {
         self.set_bind_group(0, &material.bind_group, &[]);
         self.set_bind_group(1, camera_bind_group, &[]);
         self.set_bind_group(2, light_bind_group, &[]);
+        self.set_bind_group(3, env_bind_group, &[]);
 
         self.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
         self.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
