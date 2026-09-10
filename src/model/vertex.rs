@@ -17,7 +17,7 @@ pub struct ModelVertex {
     pub texture_uv: Vec2,
     pub normal: Vec3,
     pub tangent: Vec3,
-    pub bitanget: Vec3,
+    pub bitangent: Vec3,
 }
 
 impl ModelVertex {

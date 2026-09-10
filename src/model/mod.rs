@@ -124,7 +124,7 @@ impl Material {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let bind_group = texture::create_bind_group(
+        let bind_group = texture::util::create_bind_group(
             device,
             layout,
             &textures,

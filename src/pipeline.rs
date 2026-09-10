@@ -51,7 +51,7 @@ pub fn create_render_pipeline(
         depth_stencil: depth_stencil_format.map(|format| DepthStencilState {
             format,
             depth_write_enabled: Some(true),
-            depth_compare: Some(CompareFunction::Less),
+            depth_compare: Some(CompareFunction::LessEqual),
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }),

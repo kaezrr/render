@@ -1,13 +1,23 @@
+pub mod util;
+
 use image::GenericImageView;
 use wgpu::TextureUsages;
 use wgpu::util::DeviceExt;
 use wgpu::wgt::SamplerDescriptor;
 use wgpu::wgt::TextureDescriptor;
 
+pub trait TextureType {
+    fn texture(&self) -> &wgpu::Texture;
+    fn view(&self) -> &wgpu::TextureView;
+    fn sampler(&self) -> &wgpu::Sampler;
+}
+
 #[derive(Debug)]
 pub struct Texture {
+    raw: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
+    size: wgpu::Extent3d,
 }
 
 impl Texture {
@@ -34,15 +44,17 @@ impl Texture {
     ) -> Self {
         let dimensions = image.dimensions();
 
-        let texture = device.create_texture_with_data(
+        let size = wgpu::Extent3d {
+            width: dimensions.0,
+            height: dimensions.1,
+            depth_or_array_layers: 1,
+        };
+
+        let raw = device.create_texture_with_data(
             queue,
             &TextureDescriptor {
                 label,
-                size: wgpu::Extent3d {
-                    width: dimensions.0,
-                    height: dimensions.1,
-                    depth_or_array_layers: 1,
-                },
+                size,
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
@@ -54,7 +66,7 @@ impl Texture {
             &image.to_rgba8(),
         );
 
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = raw.create_view(&wgpu::TextureViewDescriptor::default());
 
         let sampler = device.create_sampler(&SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -66,20 +78,27 @@ impl Texture {
             ..Default::default()
         });
 
-        Self { view, sampler }
+        Self {
+            raw,
+            view,
+            sampler,
+            size,
+        }
     }
 
     pub fn create_depth_texture(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
     ) -> Self {
-        let texture = device.create_texture(&TextureDescriptor {
+        let size = wgpu::Extent3d {
+            width: config.width.max(1),
+            height: config.height.max(1),
+            depth_or_array_layers: 1,
+        };
+
+        let raw = device.create_texture(&TextureDescriptor {
             label: Some("Depth Texture"),
-            size: wgpu::Extent3d {
-                width: config.width.max(1),
-                height: config.height.max(1),
-                depth_or_array_layers: 1,
-            },
+            size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -88,7 +107,7 @@ impl Texture {
             view_formats: &[],
         });
 
-        let view = texture.create_view(&wgpu::wgt::TextureViewDescriptor::default());
+        let view = raw.create_view(&wgpu::wgt::TextureViewDescriptor::default());
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -103,7 +122,12 @@ impl Texture {
             ..Default::default()
         });
 
-        Self { view, sampler }
+        Self {
+            raw,
+            view,
+            sampler,
+            size,
+        }
     }
 
     pub fn create_2d_texture(
@@ -115,13 +139,15 @@ impl Texture {
         filter_mode: wgpu::FilterMode,
         label: Option<&str>,
     ) -> Self {
-        let texture = device.create_texture(&TextureDescriptor {
+        let size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+
+        let raw = device.create_texture(&TextureDescriptor {
             label,
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
+            size,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -130,7 +156,7 @@ impl Texture {
             view_formats: &[],
         });
 
-        let view = texture.create_view(&wgpu::wgt::TextureViewDescriptor::default());
+        let view = raw.create_view(&wgpu::wgt::TextureViewDescriptor::default());
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -142,7 +168,12 @@ impl Texture {
             ..Default::default()
         });
 
-        Self { view, sampler }
+        Self {
+            raw,
+            view,
+            sampler,
+            size,
+        }
     }
 
     pub fn default_normal(device: &wgpu::Device, queue: &wgpu::Queue, label: Option<&str>) -> Self {
@@ -173,94 +204,96 @@ impl Texture {
         )
     }
 
-    pub fn view(&self) -> &wgpu::TextureView {
+    pub fn size(&self) -> wgpu::Extent3d {
+        self.size
+    }
+}
+
+#[derive(Debug)]
+pub struct CubeTexture {
+    texture: wgpu::Texture,
+    view: wgpu::TextureView,
+    sampler: wgpu::Sampler,
+}
+
+impl CubeTexture {
+    #[expect(clippy::too_many_arguments, reason = "This is a complicated function")]
+    pub fn create_2d(
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        format: wgpu::TextureFormat,
+        mip_level_count: u32,
+        usage: wgpu::TextureUsages,
+        mag_filter: wgpu::FilterMode,
+        label: Option<&str>,
+    ) -> Self {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label,
+            size: wgpu::Extent3d {
+                width,
+                height,
+                // A cube has 6 sides, so we need 6 layers
+                depth_or_array_layers: 6,
+            },
+            mip_level_count,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage,
+            view_formats: &[],
+        });
+
+        let view = texture.create_view(&wgpu::wgt::TextureViewDescriptor {
+            label,
+            dimension: Some(wgpu::TextureViewDimension::Cube),
+            array_layer_count: Some(6),
+            ..Default::default()
+        });
+
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            ..Default::default()
+        });
+
+        Self {
+            texture,
+            view,
+            sampler,
+        }
+    }
+}
+
+impl TextureType for Texture {
+    fn texture(&self) -> &wgpu::Texture {
+        &self.raw
+    }
+
+    fn view(&self) -> &wgpu::TextureView {
         &self.view
     }
+
+    fn sampler(&self) -> &wgpu::Sampler {
+        &self.sampler
+    }
 }
 
-pub fn create_bind_group_layout(
-    device: &wgpu::Device,
-    texture_count: u32,
-    has_uniform_buffer: bool,
-    label: Option<&str>,
-) -> wgpu::BindGroupLayout {
-    let mut entries = Vec::with_capacity(texture_count as usize * 2);
-    for i in 0..texture_count {
-        let texture_binding = i * 2;
-        let sampler_binding = texture_binding + 1;
-
-        entries.push(wgpu::BindGroupLayoutEntry {
-            binding: texture_binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                view_dimension: wgpu::TextureViewDimension::D2,
-                multisampled: false,
-            },
-            count: None,
-        });
-
-        entries.push(wgpu::BindGroupLayoutEntry {
-            binding: sampler_binding,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-            count: None,
-        });
+impl TextureType for CubeTexture {
+    fn texture(&self) -> &wgpu::Texture {
+        &self.texture
     }
 
-    if has_uniform_buffer {
-        entries.push(wgpu::BindGroupLayoutEntry {
-            binding: texture_count * 2,
-            visibility: wgpu::ShaderStages::FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        });
+    fn view(&self) -> &wgpu::TextureView {
+        &self.view
     }
 
-    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label,
-        entries: &entries,
-    })
-}
-
-pub fn create_bind_group(
-    device: &wgpu::Device,
-    layout: &wgpu::BindGroupLayout,
-    textures: &[&Texture],
-    uniform_buffer: Option<&wgpu::Buffer>,
-    label: Option<&str>,
-) -> wgpu::BindGroup {
-    let mut entries = Vec::with_capacity(textures.len() * 2);
-
-    for (i, texture) in textures.iter().enumerate() {
-        let texture_binding = i as u32 * 2;
-        let sampler_binding = texture_binding + 1;
-
-        entries.push(wgpu::BindGroupEntry {
-            binding: texture_binding,
-            resource: wgpu::BindingResource::TextureView(&texture.view),
-        });
-
-        entries.push(wgpu::BindGroupEntry {
-            binding: sampler_binding,
-            resource: wgpu::BindingResource::Sampler(&texture.sampler),
-        });
+    fn sampler(&self) -> &wgpu::Sampler {
+        &self.sampler
     }
-
-    if let Some(buffer) = uniform_buffer {
-        entries.push(wgpu::BindGroupEntry {
-            binding: textures.len() as u32 * 2,
-            resource: buffer.as_entire_binding(),
-        });
-    }
-
-    device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label,
-        layout,
-        entries: &entries,
-    })
 }

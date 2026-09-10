@@ -79,7 +79,7 @@ pub fn load_model_from_obj(
                 normal,
                 // We will calculate this later
                 tangent: Vec3::ZERO,
-                bitanget: Vec3::ZERO,
+                bitangent: Vec3::ZERO,
             });
         }
 
@@ -136,9 +136,9 @@ fn calculate_tangents_and_bitangents(indices: &[u32], vertices: &mut [ModelVerte
         vertices[c1].tangent += tangent;
         vertices[c2].tangent += tangent;
 
-        vertices[c0].bitanget += bitangent;
-        vertices[c1].bitanget += bitangent;
-        vertices[c2].bitanget += bitangent;
+        vertices[c0].bitangent += bitangent;
+        vertices[c1].bitangent += bitangent;
+        vertices[c2].bitangent += bitangent;
 
         triangles_included[c[0] as usize] += 1;
         triangles_included[c[1] as usize] += 1;
@@ -151,7 +151,7 @@ fn calculate_tangents_and_bitangents(indices: &[u32], vertices: &mut [ModelVerte
         let v = &mut vertices[i];
 
         v.tangent *= denom;
-        v.bitanget *= denom;
+        v.bitangent *= denom;
     }
 }
 

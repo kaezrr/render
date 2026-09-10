@@ -1,6 +1,7 @@
 mod gpu;
 
 use core::time::Duration;
+use std::fs::File;
 use std::sync::Arc;
 
 use glam::Quat;
@@ -24,6 +25,8 @@ use winit::window::Window;
 use crate::camera::Camera;
 use crate::camera::CameraBundle;
 use crate::camera::Projection;
+use crate::create_asset_path;
+use crate::hdr::HdrLoader;
 use crate::hdr::HdrPipeline;
 use crate::instance::Instance;
 use crate::instance::InstanceBundle;
@@ -43,6 +46,7 @@ use crate::pipeline;
 use crate::state::gpu::GpuContext;
 use crate::texture;
 use crate::texture::Texture;
+use crate::texture::TextureType;
 
 #[derive(Debug)]
 pub struct State<'a> {
@@ -55,12 +59,14 @@ pub struct State<'a> {
     default_material: Material,
 
     camera: CameraBundle,
-    render_pipeline: RenderPipeline,
-
     light: LightBundle,
-    light_render_pipeline: RenderPipeline,
 
     hdr: HdrPipeline,
+    render_pipeline: RenderPipeline,
+    light_render_pipeline: RenderPipeline,
+    sky_render_pipeline: RenderPipeline,
+
+    environment_bind_group: wgpu::BindGroup,
 
     cursor_grabbed: bool,
 }
@@ -73,10 +79,13 @@ impl State<'_> {
 
         let light = create_light_bundle(&gpu_context.device);
 
-        let material_bind_group_layout = texture::create_bind_group_layout(
+        let material_bind_group_layout = texture::util::create_bind_group_layout(
             &gpu_context.device,
             2,    // Diffuse and Normal Texture
             true, // with uniform buffer for properties
+            wgpu::TextureViewDimension::D2,
+            wgpu::SamplerBindingType::Filtering,
+            wgpu::ShaderStages::FRAGMENT,
             Some("Material Bind Group Layout"),
         );
 
@@ -160,6 +169,63 @@ impl State<'_> {
 
         let hdr = HdrPipeline::new(&gpu_context.device, &gpu_context.config)?;
 
+        let hdr_loader = HdrLoader::new(&gpu_context.device)?;
+
+        let sky_texture = hdr_loader.create_cube_texture(
+            &gpu_context.device,
+            &gpu_context.queue,
+            File::open_buffered(create_asset_path("pure-sky.hdr"))?,
+            1080,
+            Some("Sky Texture"),
+        )?;
+
+        let environment_layout = texture::util::create_bind_group_layout(
+            &gpu_context.device,
+            1,
+            false,
+            wgpu::TextureViewDimension::Cube,
+            wgpu::SamplerBindingType::NonFiltering,
+            wgpu::ShaderStages::VERTEX_FRAGMENT,
+            Some("environment_layout"),
+        );
+
+        let environment_bind_group = texture::util::create_bind_group(
+            &gpu_context.device,
+            &environment_layout,
+            &[&sky_texture],
+            None,
+            Some("environment_bind_group"),
+        );
+
+        let sky_render_pipeline = {
+            let layout =
+                gpu_context
+                    .device
+                    .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                        label: None,
+                        bind_group_layouts: &[
+                            Some(&camera.bind_group_layout),
+                            Some(&environment_layout),
+                        ],
+                        immediate_size: 0,
+                    });
+
+            let shader = ShaderModuleDescriptor {
+                label: Some("sky.wgsl"),
+                source: wgpu::ShaderSource::Wgsl(load_asset_string("shaders/sky.wgsl")?.into()),
+            };
+
+            pipeline::create_render_pipeline(
+                &gpu_context.device,
+                &layout,
+                HdrPipeline::TEXTURE_FORMAT,
+                Some(Texture::DEPTH_FORMAT),
+                &[],
+                shader,
+                Some("State::sky_pipeline"),
+            )
+        };
+
         Ok(Self {
             window,
             gpu_context,
@@ -170,12 +236,14 @@ impl State<'_> {
             default_material,
 
             camera,
-            render_pipeline,
-
             light,
-            light_render_pipeline,
 
             hdr,
+            sky_render_pipeline,
+            render_pipeline,
+            light_render_pipeline,
+
+            environment_bind_group,
 
             cursor_grabbed: false,
         })
@@ -240,6 +308,11 @@ impl State<'_> {
             occlusion_query_set: None,
             multiview_mask: None,
         });
+
+        render_pass.set_pipeline(&self.sky_render_pipeline);
+        render_pass.set_bind_group(0, &self.camera.bind_group, &[]);
+        render_pass.set_bind_group(1, &self.environment_bind_group, &[]);
+        render_pass.draw(0..3, 0..1);
 
         render_pass.set_pipeline(&self.light_render_pipeline);
         render_pass.draw_light_model(

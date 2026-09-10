@@ -94,15 +94,21 @@ impl Projection {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct CameraUniform {
-    view_projection: Mat4,
     view_position: Vec4,
+    view: Mat4,
+    inv_view: Mat4,
+    view_projection: Mat4,
+    inv_projection: Mat4,
 }
 
 impl CameraUniform {
     pub fn new(camera: &Camera, projection: &Projection) -> Self {
         let mut uniform = Self {
-            view_projection: Mat4::IDENTITY,
             view_position: Vec4::ZERO,
+            view: Mat4::IDENTITY,
+            inv_view: Mat4::IDENTITY,
+            view_projection: Mat4::IDENTITY,
+            inv_projection: Mat4::IDENTITY,
         };
 
         uniform.update(camera, projection);
@@ -110,8 +116,16 @@ impl CameraUniform {
     }
 
     pub fn update(&mut self, camera: &Camera, projection: &Projection) {
-        self.view_projection = projection.matrix() * camera.matrix();
+        let view = camera.matrix();
+        let projection = projection.matrix();
+
         self.view_position = camera.position.to_homogeneous();
+
+        self.view = view;
+        self.inv_view = view.inverse();
+
+        self.view_projection = projection * view;
+        self.inv_projection = projection.inverse();
     }
 }
 
