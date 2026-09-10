@@ -1,4 +1,4 @@
-use render::App;
+use hadal::App;
 use winit::event_loop::ControlFlow::Poll;
 use winit::event_loop::EventLoop;
 

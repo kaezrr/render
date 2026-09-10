@@ -54,7 +54,7 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window = {
             let attributes = Window::default_attributes()
-                .with_title("Render - PROJECT")
+                .with_title("Hadal - PROJECT")
                 .with_inner_size(LogicalSize::new(800, 600))
                 .with_fullscreen(Some(winit::window::Fullscreen::Borderless(None)));
 
@@ -171,7 +171,7 @@ pub(crate) fn load_asset_string(file_name: impl AsRef<Path>) -> std::io::Result<
 }
 
 pub(crate) fn create_asset_path(file_name: impl AsRef<Path>) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+    Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/.."))
         .join("assets")
         .join(file_name)
 }
