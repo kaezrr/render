@@ -54,12 +54,15 @@ pub fn load_model_from_obj(
                 z: object.mesh.positions[i * 3 + 2],
             };
 
+            // Need to invert the Y axis because
+            // OBJ follows OpenGL uv standard where (0, 0) is bottom left, whereas wgpu
+            // follows the modern standard where the origin is top left.
             let texture_uv = if object.mesh.texcoords.is_empty() {
                 Vec2::ZERO
             } else {
                 Vec2 {
                     x: object.mesh.texcoords[i * 2],
-                    y: object.mesh.texcoords[i * 2 + 1],
+                    y: 1.0 - object.mesh.texcoords[i * 2 + 1],
                 }
             };
 
