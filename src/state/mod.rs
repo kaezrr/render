@@ -103,7 +103,7 @@ impl State<'_> {
             &gpu_context.device,
             &gpu_context.queue,
             &material_bind_group_layout,
-            "models/cube/cube.obj",
+            "models/skull/Skull.obj",
         )?;
 
         let light_render_pipeline = {
@@ -134,7 +134,14 @@ impl State<'_> {
             )
         };
 
-        let instance_bundle = create_instance_bundle(&gpu_context.device);
+        let instance_bundle = InstanceBundle::new(
+            &gpu_context.device,
+            vec![Instance {
+                position: Vec3::ZERO,
+                rotation: Quat::IDENTITY,
+                scale: Vec3::ONE,
+            }],
+        );
 
         let depth_texture = Texture::create_depth_texture(&gpu_context.device, &gpu_context.config);
 
@@ -315,11 +322,11 @@ impl State<'_> {
         render_pass.draw(0..3, 0..1);
 
         render_pass.set_pipeline(&self.light_render_pipeline);
-        render_pass.draw_light_model(
-            &self.obj_model,
-            &self.camera.bind_group,
-            &self.light.bind_group,
-        );
+        // render_pass.draw_light_model(
+        //     &self.obj_model,
+        //     &self.camera.bind_group,
+        //     &self.light.bind_group,
+        // );
 
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_vertex_buffer(1, self.instance_bundle.buffer.slice(..));
@@ -404,44 +411,14 @@ impl State<'_> {
     }
 }
 
-fn create_instance_bundle(device: &wgpu::Device) -> InstanceBundle {
-    const SPACE_BETWEEN: f32 = 3.0;
-    const NUM_INSTANCES_PER_ROW: u32 = 10;
-
-    let instances = (0..NUM_INSTANCES_PER_ROW)
-        .flat_map(|z| {
-            (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-
-                let position = Vec3 { x, y: 0.0, z };
-
-                let rotation = if position == Vec3::ZERO {
-                    Quat::from_axis_angle(Vec3::Z, 0.0f32.to_radians())
-                } else {
-                    Quat::from_axis_angle(position.normalize(), 45.0f32.to_radians())
-                };
-
-                Instance {
-                    position,
-                    rotation,
-                    scale: Vec3::ONE,
-                }
-            })
-        })
-        .collect();
-
-    InstanceBundle::new(device, instances)
-}
-
 fn create_camera_bundle(
     device: &wgpu::Device,
     config: &wgpu::SurfaceConfiguration,
 ) -> CameraBundle {
     CameraBundle::new(
         device,
-        Camera::new((0.0, 5.0, 10.0), -90.0, -20.0),
-        Projection::new(config.width, config.height, 45.0, 0.1, 100.0),
+        Camera::new((0.0, 1.5, 3.0), -90.0, -12.0),
+        Projection::new(config.width, config.height, 60.0, 0.1, 100.0),
         4.0,
         0.4,
     )
