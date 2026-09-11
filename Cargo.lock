@@ -906,7 +906,6 @@ dependencies = [
  "glam",
  "image",
  "log",
- "pollster",
  "tobj",
  "wgpu",
  "winit",
@@ -927,6 +926,8 @@ dependencies = [
  "env_logger",
  "hadal",
  "hadal-loaders",
+ "log",
+ "pollster",
  "winit",
 ]
 

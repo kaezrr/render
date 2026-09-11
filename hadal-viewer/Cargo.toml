@@ -8,6 +8,8 @@ anyhow = "1.0.104"
 env_logger = "0.11.11"
 hadal = { path = "../hadal" }
 hadal-loaders = { path = "../hadal-loaders" }
+log = "0.4.34"
+pollster = "1.0.1"
 winit = "0.30.13"
 
 [lints]

@@ -1,4 +1,4 @@
-use hadal::App;
+use hadal_viewer::App;
 use winit::event_loop::ControlFlow::Poll;
 use winit::event_loop::EventLoop;
 
